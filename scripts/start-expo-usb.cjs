@@ -8,6 +8,7 @@ const fs = require('fs');
 
 const root = path.join(__dirname, '..');
 const port = process.env.EXPO_USB_PORT || '19002';
+const useDevClient = process.argv.includes('--dev-client');
 
 /** Charge .env pour lire EXPO_PUBLIC_API_URL avant adb reverse API */
 function loadDotEnv() {
@@ -261,12 +262,20 @@ process.env.REACT_NATIVE_PACKAGER_HOSTNAME = '127.0.0.1';
 process.env.EXPO_METRO_PORT = port;
 
 console.log('');
-console.log('>>> Dans Expo Go : exp://127.0.0.1:' + port);
+if (useDevClient) {
+  console.log('>>> Development build : exp+xpressecg://expo-development-client/?url=...');
+  console.log('    (ouvrir depuis l app Xpress ECG installee, pas Expo Go du Store)');
+} else {
+  console.log('>>> Expo Go : exp://127.0.0.1:' + port);
+}
 console.log('');
 console.log('===================================================================');
 console.log('');
 
-const child = spawn('npx', ['expo', 'start', '--port', port, '--localhost'], {
+const expoStartArgs = ['expo', 'start', '--port', port, '--localhost'];
+if (useDevClient) expoStartArgs.push('--dev-client');
+
+const child = spawn('npx', expoStartArgs, {
   stdio: 'inherit',
   shell: true,
   cwd: root,

@@ -5,6 +5,8 @@
   "scripts": {
     "start": "node scripts/start-expo.cjs",
     "start:usb": "node scripts/start-expo-usb.cjs",
+    "start:usb:devclient": "node scripts/start-expo-usb.cjs --dev-client",
+    "start:devclient": "expo start --dev-client --port 19000 --localhost",
     "start:localhost": "expo start --port 19000 --localhost",
     "start:lan": "expo start --port 19000 --lan",
     "start:tunnel": "node scripts/start-expo.cjs start --tunnel --port 19000",

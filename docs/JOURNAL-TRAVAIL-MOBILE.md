@@ -1,7 +1,7 @@
 # Journal de travail — application mobile prescripteur (Expo)
 
 Document vivant : à compléter à chaque session importante (problèmes, décisions, fichiers touchés).  
-**Projet :** `xpress-ecg-mobile` — Expo SDK 54, React Native, Expo Go pour le médecin prescripteur.
+**Projet :** `xpress-ecg-mobile` — Expo SDK 54, React Native. **Option A** : modules natifs (scanner document) via **development build** ; Expo Go du Store ne suffit plus pour ce flux.
 
 ---
 
@@ -19,6 +19,8 @@ Document vivant : à compléter à chaque session importante (problèmes, décis
 |--------|--------|
 | URL API mobile | Variable `EXPO_PUBLIC_API_URL` dans `.env` — **doit être le même port que le backend** (ex. `http://127.0.0.1:3001`). |
 | USB + Expo Go | `npm run start:usb` : `adb reverse` pour Metro **et** pour le port API si l’URL est `127.0.0.1` ou `localhost`. |
+| USB + dev client | `npm run start:usb:devclient` : idem + `expo start --dev-client` (ouvrir le projet depuis l’**app Xpress ECG** installée, pas Expo Go). |
+| Phase 0 — build native | `eas.json` profil `development` ; dépendances `expo-dev-client`, `react-native-document-scanner-plugin`, `expo-image-manipulator`. Voir `docs/PHASE0-DEV-BUILD.md`. |
 | Défaut API dans le code | `src/lib/apiClient.ts` : repli si pas de `.env` — aligné sur le port backend courant (voir historique). |
 | HTTP en dev Android | `android.usesCleartextTraffic: true` dans `app.json` (build natif ; utile pour cohérence). |
 | Navigation | `@react-navigation/native` en v7 avec les stacks v7 (éviter le mélange v6/v7). |
@@ -60,6 +62,13 @@ Document vivant : à compléter à chaque session importante (problèmes, décis
 ---
 
 ## Historique des sessions
+
+### 2026-04-07 — Phase 0 option A (development build)
+
+- Ajout **expo-dev-client**, **expo-image-manipulator** (préparation galerie / EXIF), **react-native-document-scanner-plugin** (config plugin + message caméra FR dans `app.json`).
+- Fichier **eas.json** (profils `development`, `preview`, `production`).
+- Scripts **`npm run start:usb:devclient`** et **`npm run start:devclient`** ; `start-expo-usb.cjs` accepte `--dev-client`.
+- Suite côté développeur : `eas login`, lier le projet, **`eas build --profile development --platform android`**, installer l’APK, lancer Metro avec `--dev-client`. Détail : `docs/PHASE0-DEV-BUILD.md`.
 
 ### 2026-04-07 (sessions regroupées)
 
