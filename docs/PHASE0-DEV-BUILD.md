@@ -75,4 +75,18 @@ Ouvrez le projet depuis l’**app Xpress ECG** installée (icône du projet), pa
 
 ---
 
+## Dépannage EAS : « Failed to resolve plugin … react-native-document-scanner-plugin »
+
+Sur le serveur de build, `npm ci` n’installe que ce qui est listé dans **`dependencies`** du **`package.json`**. Si le plugin est dans `app.json` mais **absent** de `package.json`, le module n’existe pas dans `node_modules` et la phase *Read app config* échoue.
+
+Vérifiez que figurent bien (versions alignées Expo 54) :
+
+- `expo-dev-client`
+- `expo-image-manipulator`
+- `react-native-document-scanner-plugin`
+
+Puis committez **`package.json`** et **`package-lock.json`** et relancez `eas build`.
+
+---
+
 *Dernière mise à jour : 2026-04-07.*
