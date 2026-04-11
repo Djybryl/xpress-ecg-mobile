@@ -52,11 +52,11 @@ EXPO_PUBLIC_API_URL=http://192.168.x.x:3000   # IP LAN pour tester sur appareil 
 ```
 app/
   _layout.tsx          → Layout racine (AuthProvider + navigation)
-  index.tsx            → Redirection auto (auth ou tabs)
+  index.tsx            → Redirection auto (auth ou espace selon le rôle)
   (auth)/
     login.tsx          → Écran de connexion + biométrie
-  (tabs)/
-    _layout.tsx        → Barre d'onglets
+  (medecin)/
+    _layout.tsx        → Barre d'onglets (garde rôle médecin)
     index.tsx          → Dashboard (stats + résumé)
     requests.tsx       → Demandes ECG (liste + filtres)
     new-ecg.tsx        → Nouvelle demande (3 étapes)

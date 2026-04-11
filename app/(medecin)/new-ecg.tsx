@@ -342,7 +342,7 @@ export default function NewEcgScreen() {
       Alert.alert(
         'Demande envoyée',
         'Votre demande ECG a été transmise avec succès.\nVous serez notifié dès qu\'un rapport sera disponible.',
-        [{ text: 'OK', onPress: () => { resetForm(); router.push('/(tabs)/requests'); } }],
+        [{ text: 'OK', onPress: () => { resetForm(); router.push('/(medecin)/requests'); } }],
       );
     } catch (e) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);

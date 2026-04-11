@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useAuth } from '@/providers/AuthProvider';
+import { homeRouteForRole } from '@/lib/routesByRole';
 import { useTheme } from '@/providers/ThemeProvider';
 import {
   View, ActivityIndicator, Text,
@@ -21,7 +22,7 @@ export default function Index() {
     if (loading || navigated.current) return;
     navigated.current = true;
     if (user) {
-      router.replace('/(tabs)');
+      router.replace(homeRouteForRole(user.role));
     } else {
       router.replace('/(auth)/login');
     }

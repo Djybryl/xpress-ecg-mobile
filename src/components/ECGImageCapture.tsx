@@ -23,7 +23,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system';
-import DocumentScanner from 'react-native-document-scanner-plugin';
+import DocumentScanner, { ResponseType } from 'react-native-document-scanner-plugin';
 import { useECGImageCorrection, type ECGImageResult } from '@/hooks/useECGImageCorrection';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -233,7 +233,7 @@ export default function ECGImageCapture({
     try {
       const { scannedImages, status } = await DocumentScanner.scanDocument({
         maxNumDocuments: 1,
-        responseType: DocumentScanner.ResponseType?.ImageFilePath ?? 'imageFilePath',
+        responseType: ResponseType.ImageFilePath,
       });
       if (status === 'cancel' || !scannedImages?.length) return;
 

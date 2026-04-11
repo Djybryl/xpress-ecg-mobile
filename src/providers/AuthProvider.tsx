@@ -12,8 +12,8 @@ const SESSION_KEY = 'xecg-user-session';
 interface AuthContextType {
   user: UserSession | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  loginWithBiometrics: () => Promise<boolean>;
+  login: (email: string, password: string) => Promise<UserSession>;
+  loginWithBiometrics: () => Promise<UserSession | null>;
   logout: () => Promise<void>;
   isBiometricAvailable: boolean;
   isBiometricEnrolled: boolean;
@@ -97,31 +97,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const session = toUserSession(data);
     await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(session));
     setUser(session);
+    return session;
   }, []);
 
-  const loginWithBiometrics = useCallback(async (): Promise<boolean> => {
-    if (!isBiometricAvailable || !isBiometricEnrolled) return false;
+  const loginWithBiometrics = useCallback(async (): Promise<UserSession | null> => {
+    if (!isBiometricAvailable || !isBiometricEnrolled) return null;
     const result = await LocalAuthentication.authenticateAsync({
       promptMessage: 'Identifiez-vous pour accéder à Xpress ECG',
       cancelLabel: 'Annuler',
       fallbackLabel: 'Mot de passe',
     });
-    if (!result.success) return false;
-    // Vérifier qu'un token valide existe encore
+    if (!result.success) return null;
     const token = await tokenStorage.getAccess();
-    if (!token) return false;
+    if (!token) return null;
     try {
       const me = await api.get<{ user: LoginResponse['user'] }>('/auth/me');
       const session: UserSession = {
         id: me.user.id, email: me.user.email, name: me.user.fullName,
         role: normalizeApiRole(me.user.role), hospitalId: me.user.hospitalId,
+        prescriberFirstLoginAt: me.user.prescriberFirstLoginAt ?? null,
         prescriberGateStatus: me.user.prescriberGateStatus ?? null,
       };
       await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(session));
       setUser(session);
-      return true;
+      return session;
     } catch {
-      return false;
+      return null;
     }
   }, [isBiometricAvailable, isBiometricEnrolled]);
 

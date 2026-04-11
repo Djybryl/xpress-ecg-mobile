@@ -1,11 +1,10 @@
-import { Tabs, router } from 'expo-router';
-import { useEffect } from 'react';
+import { Tabs } from 'expo-router';
 import { View, Text, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useRoleGuard } from '@/hooks/useRoleGuard';
 
 /** Icône + libellé : tout tient dans la zone sans rognage (pas de marge négative ici). */
 function TabIcon({
@@ -156,17 +155,11 @@ function NewEcgIcon({ focused }: { focused: boolean }) {
 }
 
 export default function TabLayout() {
-  const { user, loading } = useAuth();
+  const ok = useRoleGuard('medecin');
   const { colors: joyful } = useTheme();
   const insets = useSafeAreaInsets();
 
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/(auth)/login');
-    }
-  }, [user, loading]);
-
-  if (!user) return null;
+  if (!ok) return null;
 
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 8);
   /** Hauteur zone icône + libellé (évite tout rognage). */

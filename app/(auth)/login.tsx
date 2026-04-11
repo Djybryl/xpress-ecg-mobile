@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/providers/AuthProvider';
+import { homeRouteForRole } from '@/lib/routesByRole';
 
 export default function LoginScreen() {
   const { login, loginWithBiometrics, isBiometricAvailable, isBiometricEnrolled } = useAuth();
@@ -21,8 +22,8 @@ export default function LoginScreen() {
     }
     setLoading(true);
     try {
-      await login(email.trim().toLowerCase(), password);
-      router.replace('/(tabs)');
+      const session = await login(email.trim().toLowerCase(), password);
+      router.replace(homeRouteForRole(session.role));
     } catch (e) {
       Alert.alert('Connexion échouée', e instanceof Error ? e.message : 'Vérifiez vos identifiants.');
     } finally {
@@ -33,8 +34,8 @@ export default function LoginScreen() {
   const handleBiometric = async () => {
     setBioLoading(true);
     try {
-      const ok = await loginWithBiometrics();
-      if (ok) { router.replace('/(tabs)'); }
+      const session = await loginWithBiometrics();
+      if (session) { router.replace(homeRouteForRole(session.role)); }
       else { Alert.alert('Échec', 'Authentification biométrique échouée.'); }
     } finally {
       setBioLoading(false);
@@ -58,7 +59,7 @@ export default function LoginScreen() {
             <Text className="text-white text-3xl font-bold">♥</Text>
           </View>
           <Text className="text-white text-3xl font-bold tracking-tight">Xpress ECG</Text>
-          <Text className="text-indigo-200 text-base mt-1">Espace Médecin Prescripteur</Text>
+          <Text className="text-indigo-200 text-base mt-1">Espace professionnel</Text>
         </View>
 
         {/* Formulaire */}

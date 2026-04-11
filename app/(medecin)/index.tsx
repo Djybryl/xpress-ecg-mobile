@@ -135,7 +135,7 @@ export default function HomeScreen() {
             {urgentUnreadCount > 0 && (
               <TouchableOpacity
                 className="bg-red-500 rounded-full px-3 py-1 flex-row items-center gap-1"
-                onPress={() => router.push('/(tabs)/reports')}
+                onPress={() => router.push('/(medecin)/reports')}
               >
                 <Text className="text-white text-xs font-bold">
                   🔴 {urgentUnreadCount} urgent{urgentUnreadCount > 1 ? 's' : ''}
@@ -208,7 +208,7 @@ export default function HomeScreen() {
               {ecgRemaining <= 0 && (
                 <TouchableOpacity
                   className="bg-indigo-600 rounded-xl px-3 py-1.5"
-                  onPress={() => router.push('/(tabs)/profile')}
+                  onPress={() => router.push('/(medecin)/profile')}
                   activeOpacity={0.8}
                 >
                   <Text className="text-white text-xs font-semibold">Voir offres</Text>
@@ -226,7 +226,7 @@ export default function HomeScreen() {
               <TouchableOpacity
                 key={report.id}
                 className="bg-red-50 border border-red-200 rounded-xl p-3 mb-2 flex-row items-center"
-                onPress={() => router.push('/(tabs)/reports')}
+                onPress={() => router.push('/(medecin)/reports')}
                 activeOpacity={0.8}
               >
                 <View className="w-9 h-9 rounded-full bg-red-100 items-center justify-center mr-3">
@@ -253,7 +253,7 @@ export default function HomeScreen() {
           <View className="mx-4 mt-4">
             <View className="flex-row items-center justify-between mb-2">
               <Text className="text-sm font-semibold text-gray-700 dark:text-zinc-200">Demandes récentes</Text>
-              <TouchableOpacity onPress={() => router.push('/(tabs)/requests')}>
+              <TouchableOpacity onPress={() => router.push('/(medecin)/requests')}>
                 <Text className="text-indigo-600 dark:text-violet-400 text-xs">Voir tout</Text>
               </TouchableOpacity>
             </View>
@@ -289,7 +289,7 @@ export default function HomeScreen() {
           <View className="mx-4 mt-4">
             <View className="flex-row items-center justify-between mb-2">
               <Text className="text-sm font-semibold text-gray-700 dark:text-zinc-200">Rapports non lus</Text>
-              <TouchableOpacity onPress={() => router.push('/(tabs)/reports')}>
+              <TouchableOpacity onPress={() => router.push('/(medecin)/reports')}>
                 <Text className="text-indigo-600 dark:text-violet-400 text-xs">Voir tout</Text>
               </TouchableOpacity>
             </View>
@@ -299,7 +299,7 @@ export default function HomeScreen() {
                   {index > 0 && <View className="h-px bg-gray-100 dark:bg-zinc-800 mx-4" />}
                   <TouchableOpacity
                     className="flex-row items-center px-4 py-3"
-                    onPress={() => router.push('/(tabs)/reports')}
+                    onPress={() => router.push('/(medecin)/reports')}
                     activeOpacity={0.7}
                   >
                     <View className="w-8 h-8 rounded-full bg-green-100 items-center justify-center mr-3">
@@ -330,7 +330,7 @@ export default function HomeScreen() {
         {/* Bouton Nouvel ECG */}
         <TouchableOpacity
           className="mx-4 mt-5 bg-indigo-600 rounded-2xl py-4 items-center flex-row justify-center gap-2 shadow-md shadow-indigo-300"
-          onPress={() => router.push('/(tabs)/new-ecg')}
+          onPress={() => router.push('/(medecin)/new-ecg')}
           activeOpacity={0.85}
           style={{ elevation: 4 }}
         >

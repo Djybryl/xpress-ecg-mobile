@@ -1,0 +1,32 @@
+feat(mobile): phases 1-2-3 multi-profils (architecture, cardiologue, secretaire)
+
+Phase 1 - Architecture monorepo et routage par role :
+- Renommage app/(tabs)/ vers app/(medecin)/ avec MAJ des liens internes
+- app/index.tsx : redirection selon user.role via homeRouteForRole
+- app/(auth)/login.tsx : redirection post-login par role, sous-titre generique
+- src/lib/routesByRole.ts : mapping role vers route racine
+- src/hooks/useRoleGuard.ts : garde de route par role
+- src/components/shared/RoleGuard.tsx : wrapper declaratif
+- Stubs (cardiologue), (secretaire), (admin) avec RoleStubScreen
+- Correction ECGImageCapture.tsx (TS2339 ResponseType)
+- AuthProvider.tsx : login retourne Promise<UserSession>
+
+Phase 2 - Profil Cardiologue :
+- app/(cardiologue)/_layout.tsx : Tab bar 5 onglets
+- app/(cardiologue)/index.tsx : dashboard stats, urgences, dossiers actifs
+- app/(cardiologue)/queue.tsx : file ECG avec filtres et recherche
+- app/(cardiologue)/interpret/[id].tsx : formulaire multi-etapes interpretation
+- app/(cardiologue)/commissions.tsx : ratios Give-Get avec historique
+- app/(cardiologue)/profile.tsx : reexport ProfileScreenShared
+- src/components/shared/ProfileScreenShared.tsx : profil commun tous roles
+- Hooks : useCardiologistDashboard, useCardiologistQueue, useCardiologistRatios, useEcgRecordDetail, parseEcgListResponse
+
+Phase 3 - Profil Secretaire :
+- app/(secretaire)/_layout.tsx : Tab bar 4 onglets
+- app/(secretaire)/index.tsx : dashboard stats + apercu ECG en attente
+- app/(secretaire)/ecg-queue.tsx : liste ECG filtree + validation ECG
+- app/(secretaire)/prescribers.tsx : dossiers prescripteurs + Valider/Rejeter
+- app/(secretaire)/profile.tsx : reexport ProfileScreenShared
+- Hooks : useSecretaireDashboard, useEcgValidationQueue, usePendingPrescribers
+
+TypeScript : 0 erreur (npx tsc --noEmit)
