@@ -7,26 +7,55 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_ENV": "development",
+        "EXPO_PUBLIC_API_URL": "http://192.168.1.100:5000/api/v1"
+      },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleDebug"
       },
       "ios": {
         "simulator": false
       }
     },
-    "preview": {
+    "staging": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_ENV": "staging",
+        "EXPO_PUBLIC_API_URL": "https://staging-api.xpress-ecg.com/api/v1"
+      },
       "android": {
         "buildType": "apk"
-      }
+      },
+      "ios": {
+        "simulator": false
+      },
+      "channel": "staging"
     },
     "production": {
+      "env": {
+        "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://api.xpress-ecg.com/api/v1"
+      },
       "android": {
         "buildType": "app-bundle"
-      }
+      },
+      "channel": "production",
+      "autoIncrement": "buildNumber"
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "internal"
+      },
+      "ios": {
+        "appleId": "contact@xpress-ecg.com",
+        "ascAppId": "YOUR_APP_STORE_CONNECT_APP_ID",
+        "appleTeamId": "YOUR_APPLE_TEAM_ID"
+      }
+    }
   }
 }
