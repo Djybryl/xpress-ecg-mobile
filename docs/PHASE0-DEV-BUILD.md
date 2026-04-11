@@ -67,6 +67,70 @@ Ouvrez le projet depuis l’**app Xpress ECG** installée (icône du projet), pa
 
 ---
 
+## URL à saisir dans la development build (écran « serveur local »)
+
+Ce champ sert à joindre **Metro** (bundler JavaScript), **pas** l’API backend.
+
+| À mettre | Exemple |
+|----------|---------|
+| **Oui** | `exp://127.0.0.1:19002` (même **port** que dans le terminal après `npm run start:usb:devclient`) |
+| **Non** | `http://127.0.0.1:3001` → c’est l’**API** (`EXPO_PUBLIC_API_URL` dans `.env`), pas Metro |
+
+Si l’app demande sans `exp://`, essayez `127.0.0.1:19002` selon l’UI.
+
+---
+
+## Mode tunnel (Metro sans USB / sans LAN fiable)
+
+Quand le téléphone sert de **point d’accès** au PC ou que le Wi‑Fi ne permet pas d’atteindre l’IP locale du PC, le **tunnel Expo** fait passer le bundler Metro par les serveurs Expo (via ngrok), ce qui fonctionne sur **4G / hotspot**.
+
+### Prérequis
+
+- Compte **Expo** (même que pour EAS) : `npx expo login` si besoin.
+- Connexion Internet sur le PC (via le partage du téléphone ou autre).
+
+### Commande (development build)
+
+Dans le dossier `xpress-ecg-mobile` :
+
+```bash
+npm run start:tunnel:devclient
+```
+
+Équivalent manuel :
+
+```bash
+npx expo start --tunnel --dev-client --port 19000
+```
+
+### Déroulement
+
+1. Le terminal affiche un **QR code** et une URL du type `exp://…@…` ou un lien **https://u.expo.dev/…** (selon la version).
+2. Sur le téléphone, ouvrez **Xpress ECG** (dev build) et saisissez l’**URL du serveur de développement** indiquée par Expo (souvent bouton « copier » dans le terminal ou scan du QR).
+
+#### Le QR ou l’URL n’apparaissent pas dans PowerShell
+
+- **Faites défiler** le terminal vers le **haut** : cherchez une ligne du type **`Metro waiting on`** avec une **URL soulignée** (`exp://…@…exp.direct…`) — c’est souvent **au-dessus** du dernier message.
+- Cliquez **dans** la fenêtre du terminal (pour le focus), puis touche **`c`** : Expo **réaffiche** le QR du projet (raccourci pas toujours listé en mode compact).
+- Touche **`?`** : liste des commandes.
+- **Encodage** : dans **cmd** avec UTF-8, depuis le dossier du projet : `npm run start:tunnel:devclient:utf8` (script qui fait `chcp 65001` puis le tunnel).
+- **Terminal intégré Cursor** : parfois le QR ne s’affiche pas correctement → essayez **PowerShell** ou **Invite de commandes** **en dehors** de Cursor, ou **Windows Terminal**.
+3. La première utilisation du tunnel peut demander d’accepter les **conditions ngrok** dans le terminal (taper `Y`).
+4. Le premier chargement peut être **plus lent** qu’en USB ou LAN.
+
+### Limites
+
+- Le tunnel ne remplace **pas** l’**API backend** : `EXPO_PUBLIC_API_URL` doit toujours être joignable depuis le téléphone (souvent **USB + `adb reverse`** vers `http://127.0.0.1:3001`, ou un tunnel séparé type ngrok sur le port 3001).
+- Gratuit : quotas / débit ngrok peuvent varier ; en cas d’échec, relancer `npm run start:tunnel:devclient`.
+
+### Erreur « ngrok tunnel took too long to connect »
+
+Expo attend par défaut **10 s** pour ngrok — souvent **trop court** en 4G / point d’accès. Le projet applique un patch **120 s** via `postinstall` → `scripts/patch-expo-tunnel-timeout.cjs` (fichier cible : `expo/node_modules/@expo/cli/.../AsyncNgrok.js`).
+
+Après un `npm install`, si l’erreur revient : `node scripts/patch-expo-tunnel-timeout.cjs`. Vérifiez aussi **VPN désactivé**, réseau stable, et `npx expo login` effectué.
+
+---
+
 ## Rappels
 
 - Tant que la **development build** n’est pas installée, le **scanner document** ne sera pas utilisable en conditions réelles.

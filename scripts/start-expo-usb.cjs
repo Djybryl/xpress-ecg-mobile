@@ -48,7 +48,7 @@ function sleepSync(ms) {
 
 function killPort(p) {
   try {
-    const r = spawnSync('cmd.exe', ['/c', `netstat -aon | findstr ":${p}" | findstr "LISTENING"`], {
+    const r = spawnSync('cmd.exe', ['/c', `netstat -aon | findstr ":${p}"`], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
@@ -57,8 +57,11 @@ function killPort(p) {
     const out = (r.stdout || '').trim();
     if (!out) return;
     const pids = new Set();
-    for (const line of out.split('\n')) {
-      const parts = line.trim().split(/\s+/);
+    for (const line of out.split(/\r?\n/)) {
+      const t = line.trim();
+      if (!/\bLISTENING\b/i.test(t)) continue;
+      if (!new RegExp(':' + p + '(\\s|$)').test(t)) continue;
+      const parts = t.split(/\s+/);
       const pid = parts[parts.length - 1];
       if (pid && /^\d+$/.test(pid)) pids.add(pid);
     }
@@ -173,6 +176,8 @@ function resolveAdb() {
 }
 
 killPort(port);
+/* Libere aussi 8081 si un vieux Metro (expo start par defaut) bloque */
+killPort('8081');
 
 const adb = resolveAdb();
 if (!adb) {
@@ -263,8 +268,9 @@ process.env.EXPO_METRO_PORT = port;
 
 console.log('');
 if (useDevClient) {
-  console.log('>>> Development build : exp+xpressecg://expo-development-client/?url=...');
-  console.log('    (ouvrir depuis l app Xpress ECG installee, pas Expo Go du Store)');
+  console.log('>>> Dans l app Xpress ECG (dev build), champ URL du serveur de dev :');
+  console.log('    exp://127.0.0.1:' + port);
+  console.log('    (PAS http://127.0.0.1:3001 — c est l API, configuree dans .env)');
 } else {
   console.log('>>> Expo Go : exp://127.0.0.1:' + port);
 }

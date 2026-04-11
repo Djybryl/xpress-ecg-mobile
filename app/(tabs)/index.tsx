@@ -3,14 +3,22 @@ import {
   View, Text, ScrollView, TouchableOpacity,
   RefreshControl, ActivityIndicator, Platform,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '@/providers/ThemeProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '@/providers/AuthProvider';
 import { useEcgList, type EcgRecordItem } from '@/hooks/useEcgList';
 import { useReportList, type ReportItem } from '@/hooks/useReportList';
+import { useEconomyMe } from '@/hooks/useEconomyMe';
 
+/**
+ * Supprime le préfixe de titre médical (Dr, Dr., Pr, Pr.) en début de nom,
+ * puis retourne le premier prénom — évite "Dr. Dr. Jean" si le nom contient déjà "Dr.".
+ */
 function getFirstName(fullName: string): string {
-  return fullName.split(' ')[0] ?? fullName;
+  const stripped = fullName.replace(/^(\s*(Dr\.?\s+|Pr\.?\s+))+/i, '').trim();
+  return stripped.split(' ')[0] ?? stripped;
 }
 
 function getGreeting(): string {
@@ -55,14 +63,15 @@ function StatusBadge({ status }: { status: EcgRecordItem['status'] }) {
 function StatCard({ value, label, color }: { value: number; label: string; color: string }) {
   return (
     <View className={`flex-1 ${color} rounded-2xl p-4 items-center`}>
-      <Text className="text-2xl font-bold text-gray-800">{value}</Text>
-      <Text className="text-xs text-gray-500 mt-0.5 text-center">{label}</Text>
+      <Text className="text-2xl font-bold text-gray-800 dark:text-zinc-100">{value}</Text>
+      <Text className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5 text-center">{label}</Text>
     </View>
   );
 }
 
 export default function HomeScreen() {
   const { user } = useAuth();
+  const { colors: joyful } = useTheme();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -81,11 +90,18 @@ export default function HomeScreen() {
     enabled: !!user?.id,
   });
 
+  const { data: economy, refetch: refetchEconomy } = useEconomyMe(!!user?.id);
+
+  const ecgUsed      = economy?.quota?.ecg_used ?? economy?.subscription?.ecg_used_this_month ?? 0;
+  const ecgLimit     = economy?.quota?.ecg_limit ?? economy?.subscription?.monthly_ecg_quota ?? 0;
+  const ecgRemaining = economy?.gate?.remaining ?? Math.max(0, ecgLimit - ecgUsed);
+  const isFreeQuota  = economy != null && economy.accessLevel === 'GRATUIT' && ecgLimit > 0;
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchEcg(), refetchReports()]);
+    await Promise.all([refetchEcg(), refetchReports(), refetchEconomy()]);
     setRefreshing(false);
-  }, [refetchEcg, refetchReports]);
+  }, [refetchEcg, refetchReports, refetchEconomy]);
 
   const pendingCount  = ecgRecords.filter(e => e.status === 'pending').length;
   const analyzingCount = ecgRecords.filter(e => e.status === 'analyzing' || e.status === 'assigned').length;
@@ -98,9 +114,14 @@ export default function HomeScreen() {
   const isLoading = ecgLoading || reportsLoading;
 
   return (
-    <View className="flex-1 bg-gray-50" style={{ paddingTop: insets.top }}>
+    <View className="flex-1 dark:bg-zinc-950" style={{ paddingTop: insets.top, backgroundColor: joyful.screenBg }}>
       {/* Header */}
-      <View className="bg-indigo-600 px-5 pt-4 pb-6">
+      <LinearGradient
+        colors={[...joyful.gradientCamera]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 }}
+      >
         <View className="flex-row items-center justify-between mb-1">
           <View>
             <Text className="text-indigo-200 text-sm">
@@ -130,7 +151,7 @@ export default function HomeScreen() {
             )}
           </View>
         </View>
-      </View>
+      </LinearGradient>
 
       <ScrollView
         className="flex-1 -mt-4"
@@ -141,7 +162,7 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingBottom: 30 }}
       >
         {/* Stats */}
-        <View className="bg-white mx-4 rounded-2xl p-4 shadow-sm shadow-gray-200">
+        <View className="bg-white dark:bg-zinc-900 mx-4 rounded-2xl p-4 shadow-sm shadow-gray-200 dark:shadow-none border border-gray-100 dark:border-zinc-800">
           {isLoading
             ? <ActivityIndicator color="#4f46e5" size="small" />
             : (
@@ -155,10 +176,52 @@ export default function HomeScreen() {
           }
         </View>
 
+        {/* Quota ECG mensuel — plan gratuit uniquement */}
+        {isFreeQuota && (
+          <View className="mx-4 mt-3">
+            <View
+              className={`rounded-2xl px-4 py-3 flex-row items-center gap-3 border ${
+                ecgRemaining <= 0
+                  ? 'bg-red-50 border-red-200 dark:bg-red-950/40 dark:border-red-900'
+                  : ecgRemaining <= 3
+                  ? 'bg-amber-50 border-amber-200 dark:bg-amber-950/40 dark:border-amber-900'
+                  : 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-900'
+              }`}
+            >
+              <Text className="text-2xl">
+                {ecgRemaining <= 0 ? '🚫' : ecgRemaining <= 3 ? '⚠️' : '✅'}
+              </Text>
+              <View className="flex-1">
+                <Text className={`text-sm font-bold ${
+                  ecgRemaining <= 0 ? 'text-red-700 dark:text-red-400'
+                  : ecgRemaining <= 3 ? 'text-amber-700 dark:text-amber-400'
+                  : 'text-emerald-700 dark:text-emerald-400'
+                }`}>
+                  {ecgRemaining <= 0
+                    ? 'Quota mensuel épuisé'
+                    : `${ecgRemaining} demande${ecgRemaining > 1 ? 's' : ''} restante${ecgRemaining > 1 ? 's' : ''} ce mois`}
+                </Text>
+                <Text className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                  {ecgUsed} / {ecgLimit} ECG utilisés · Compte gratuit
+                </Text>
+              </View>
+              {ecgRemaining <= 0 && (
+                <TouchableOpacity
+                  className="bg-indigo-600 rounded-xl px-3 py-1.5"
+                  onPress={() => router.push('/(tabs)/profile')}
+                  activeOpacity={0.8}
+                >
+                  <Text className="text-white text-xs font-semibold">Voir offres</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+
         {/* Alertes urgentes */}
         {urgentUnread.length > 0 && (
           <View className="mx-4 mt-4">
-            <Text className="text-sm font-semibold text-gray-700 mb-2">🔴 Rapports urgents</Text>
+            <Text className="text-sm font-semibold text-gray-700 dark:text-zinc-200 mb-2">🔴 Rapports urgents</Text>
             {urgentUnread.map(report => (
               <TouchableOpacity
                 key={report.id}
@@ -179,7 +242,7 @@ export default function HomeScreen() {
                     {timeAgo(report.updated_at)} · {report.cardiologist_name ?? 'Cardiologue'}
                   </Text>
                 </View>
-                <Text className="text-gray-400 text-base">›</Text>
+                <Text className="text-gray-400 dark:text-zinc-500 text-base">›</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -189,27 +252,27 @@ export default function HomeScreen() {
         {recentRequests.length > 0 && (
           <View className="mx-4 mt-4">
             <View className="flex-row items-center justify-between mb-2">
-              <Text className="text-sm font-semibold text-gray-700">Demandes récentes</Text>
+              <Text className="text-sm font-semibold text-gray-700 dark:text-zinc-200">Demandes récentes</Text>
               <TouchableOpacity onPress={() => router.push('/(tabs)/requests')}>
-                <Text className="text-indigo-600 text-xs">Voir tout</Text>
+                <Text className="text-indigo-600 dark:text-violet-400 text-xs">Voir tout</Text>
               </TouchableOpacity>
             </View>
-            <View className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm shadow-gray-100">
+            <View className="bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden border border-gray-100 dark:border-zinc-800 shadow-sm shadow-gray-100 dark:shadow-none">
               {recentRequests.map((item, index) => (
                 <View key={item.id}>
-                  {index > 0 && <View className="h-px bg-gray-100 mx-4" />}
+                  {index > 0 && <View className="h-px bg-gray-100 dark:bg-zinc-800 mx-4" />}
                   <View className="flex-row items-center px-4 py-3">
                     <View className="w-8 h-8 rounded-full bg-indigo-100 items-center justify-center mr-3">
-                      <Text className="text-xs font-bold text-indigo-600">
+                      <Text className="text-xs font-bold text-indigo-600 dark:text-violet-400">
                         {(item.patient_name ?? 'P').slice(0, 2).toUpperCase()}
                       </Text>
                     </View>
                     <View className="flex-1 mr-2">
-                      <Text className="text-sm font-medium text-gray-900" numberOfLines={1}>
+                      <Text className="text-sm font-medium text-gray-900 dark:text-zinc-100" numberOfLines={1}>
                         {item.patient_name}
                         {item.urgency === 'urgent' && ' ⚡'}
                       </Text>
-                      <Text className="text-xs text-gray-500">
+                      <Text className="text-xs text-gray-500 dark:text-zinc-400">
                         {item.reference} · {timeAgo(item.created_at)}
                       </Text>
                     </View>
@@ -225,15 +288,15 @@ export default function HomeScreen() {
         {recentReports.length > 0 && (
           <View className="mx-4 mt-4">
             <View className="flex-row items-center justify-between mb-2">
-              <Text className="text-sm font-semibold text-gray-700">Rapports non lus</Text>
+              <Text className="text-sm font-semibold text-gray-700 dark:text-zinc-200">Rapports non lus</Text>
               <TouchableOpacity onPress={() => router.push('/(tabs)/reports')}>
-                <Text className="text-indigo-600 text-xs">Voir tout</Text>
+                <Text className="text-indigo-600 dark:text-violet-400 text-xs">Voir tout</Text>
               </TouchableOpacity>
             </View>
-            <View className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm shadow-gray-100">
+            <View className="bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden border border-gray-100 dark:border-zinc-800 shadow-sm shadow-gray-100 dark:shadow-none">
               {recentReports.map((report, index) => (
                 <View key={report.id}>
-                  {index > 0 && <View className="h-px bg-gray-100 mx-4" />}
+                  {index > 0 && <View className="h-px bg-gray-100 dark:bg-zinc-800 mx-4" />}
                   <TouchableOpacity
                     className="flex-row items-center px-4 py-3"
                     onPress={() => router.push('/(tabs)/reports')}
@@ -245,10 +308,10 @@ export default function HomeScreen() {
                       </Text>
                     </View>
                     <View className="flex-1 mr-2">
-                      <Text className="text-sm font-medium text-gray-900" numberOfLines={1}>
+                      <Text className="text-sm font-medium text-gray-900 dark:text-zinc-100" numberOfLines={1}>
                         {report.patient_name ?? 'Patient inconnu'}
                       </Text>
-                      <Text className="text-xs text-gray-500">
+                      <Text className="text-xs text-gray-500 dark:text-zinc-400">
                         {timeAgo(report.updated_at)} · {report.cardiologist_name ?? 'Cardiologue'}
                       </Text>
                     </View>
@@ -279,10 +342,10 @@ export default function HomeScreen() {
         {!isLoading && ecgRecords.length === 0 && reports.length === 0 && (
           <View className="items-center mt-12 px-8">
             <Text className="text-5xl mb-4">🏥</Text>
-            <Text className="text-gray-700 text-lg font-semibold text-center">
+            <Text className="text-gray-700 dark:text-zinc-200 text-lg font-semibold text-center">
               Bienvenue sur Xpress ECG
             </Text>
-            <Text className="text-gray-500 text-sm text-center mt-2 leading-relaxed">
+            <Text className="text-gray-500 dark:text-zinc-400 text-sm text-center mt-2 leading-relaxed">
               Déposez votre première demande ECG en appuyant sur le bouton ci-dessus.
             </Text>
           </View>

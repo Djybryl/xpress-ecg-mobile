@@ -59,14 +59,16 @@ export function useReportList(params: UseReportListParams = {}) {
   useEffect(() => { void fetchReports(); }, [fetchReports]);
 
   const markRead = useCallback(async (id: string) => {
-    await api.patch(`/reports/${id}/read`);
+    await api.patch(`/reports/${id}/mark-read`);
     setReports(prev => prev.map(r => r.id === id ? { ...r, is_read: true } : r));
   }, []);
 
   const markAllRead = useCallback(async () => {
-    await api.post('/reports/mark-all-read');
+    const unreadIds = reports.filter(r => !r.is_read).map(r => r.id);
+    if (unreadIds.length === 0) return;
+    await Promise.all(unreadIds.map(id => api.patch(`/reports/${id}/mark-read`)));
     setReports(prev => prev.map(r => ({ ...r, is_read: true })));
-  }, []);
+  }, [reports]);
 
   const unreadCount = reports.filter(r => !r.is_read).length;
   const urgentUnreadCount = reports.filter(r => !r.is_read && r.is_urgent).length;

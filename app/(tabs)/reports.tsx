@@ -1,14 +1,15 @@
 import { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, RefreshControl,
-  ActivityIndicator, Alert, Linking,
+  ActivityIndicator, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/providers/AuthProvider';
 import { useReportList, type ReportItem } from '@/hooks/useReportList';
+import { useTheme } from '@/providers/ThemeProvider';
+import { api, getApiErrorMessage } from '@/lib/apiClient';
+import { saveReportPdfFromSignedUrl } from '@/lib/saveReportPdf';
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -25,16 +26,20 @@ function timeAgo(dateStr: string): string {
 function ReportCard({
   report,
   onRead,
-  onOpenPdf,
+  onDownloadPdf,
+  pdfOpening,
 }: {
   report: ReportItem;
   onRead: (id: string) => void;
-  onOpenPdf: (report: ReportItem) => void;
+  onDownloadPdf: (report: ReportItem) => void;
+  pdfOpening: boolean;
 }) {
   return (
     <TouchableOpacity
-      className={`rounded-2xl mb-3 overflow-hidden border shadow-sm shadow-gray-100 ${
-        report.is_read ? 'bg-white border-gray-100' : 'bg-white border-indigo-200'
+      className={`rounded-2xl mb-3 overflow-hidden border shadow-sm shadow-gray-100 dark:shadow-none ${
+        report.is_read
+          ? 'bg-white dark:bg-zinc-900 border-gray-100 dark:border-zinc-800'
+          : 'bg-white dark:bg-zinc-900 border-indigo-200 dark:border-violet-600'
       }`}
       onPress={() => {
         if (!report.is_read) onRead(report.id);
@@ -59,7 +64,7 @@ function ReportCard({
 
           <View className="flex-1">
             <View className="flex-row items-center flex-wrap gap-1 mb-1">
-              <Text className="text-sm font-semibold text-gray-900 flex-1" numberOfLines={1}>
+              <Text className="text-sm font-semibold text-gray-900 dark:text-zinc-100 flex-1" numberOfLines={1}>
                 {report.patient_name ?? 'Patient inconnu'}
                 {report.is_urgent && ' ⚡'}
               </Text>
@@ -68,11 +73,11 @@ function ReportCard({
               )}
             </View>
 
-            <Text className="text-xs text-gray-500 mb-0.5">
+            <Text className="text-xs text-gray-500 dark:text-zinc-400 mb-0.5">
               {report.ecg_reference ?? '—'} · {report.cardiologist_name ?? 'Cardiologue'}
             </Text>
 
-            <Text className="text-xs text-gray-400">
+            <Text className="text-xs text-gray-400 dark:text-zinc-500">
               {timeAgo(report.updated_at)}
             </Text>
           </View>
@@ -87,20 +92,27 @@ function ReportCard({
 
         {/* Conclusion */}
         {report.conclusion && (
-          <Text className="text-xs text-gray-600 leading-relaxed mb-3" numberOfLines={3}>
+          <Text className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed mb-3" numberOfLines={3}>
             {report.conclusion}
           </Text>
         )}
 
-        {/* Actions */}
-        {report.pdf_url && (
+        {/* PDF : URL signée via GET /reports/:id/pdf — enregistrement direct dans Documents/Rapports (sans partage / navigateur). */}
+        {(report.status === 'sent' || report.status === 'validated' || !!report.pdf_url) && (
           <TouchableOpacity
-            className="flex-row items-center justify-center bg-indigo-50 border border-indigo-200 rounded-xl py-2.5 gap-2"
-            onPress={() => onOpenPdf(report)}
+            className="flex-row items-center justify-center bg-indigo-50 dark:bg-violet-950 border border-indigo-200 dark:border-violet-700 rounded-xl py-2.5 gap-2"
+            onPress={() => onDownloadPdf(report)}
+            disabled={pdfOpening}
             activeOpacity={0.8}
           >
-            <Text className="text-indigo-600 text-base">📄</Text>
-            <Text className="text-indigo-700 text-xs font-semibold">Voir le rapport PDF</Text>
+            {pdfOpening
+              ? <ActivityIndicator color="#4f46e5" size="small" />
+              : (
+                <>
+                  <Text className="text-indigo-600 text-base">⬇️</Text>
+                  <Text className="text-indigo-700 dark:text-violet-200 text-xs font-semibold">Télécharger le PDF</Text>
+                </>
+              )}
           </TouchableOpacity>
         )}
       </View>
@@ -110,6 +122,7 @@ function ReportCard({
 
 export default function ReportsScreen() {
   const { user } = useAuth();
+  const { colors: joyful } = useTheme();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread' | 'urgent'>('all');
@@ -136,26 +149,32 @@ export default function ReportsScreen() {
     return true;
   });
 
-  const handleOpenPdf = useCallback(async (report: ReportItem) => {
-    if (!report.pdf_url) return;
+  const handleDownloadPdf = useCallback(async (report: ReportItem) => {
     setPdfLoading(report.id);
     try {
-      // Essaie d'ouvrir en partage natif (permet impression, etc.)
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        const localUri = FileSystem.cacheDirectory + `rapport_${report.id}.pdf`;
-        const info = await FileSystem.getInfoAsync(localUri);
-        if (!info.exists) {
-          await FileSystem.downloadAsync(report.pdf_url, localUri);
-        }
-        await Sharing.shareAsync(localUri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
-      } else {
-        await Linking.openURL(report.pdf_url);
+      const { pdf_url: signedUrl } = await api.get<{ pdf_url: string }>(`/reports/${report.id}/pdf`);
+      if (!signedUrl?.startsWith('http')) {
+        Alert.alert('Erreur', 'Lien du rapport indisponible. Réessayez dans un instant.');
+        return;
       }
+
+      const { folderLabel } = await saveReportPdfFromSignedUrl(
+        signedUrl,
+        report.id,
+        report.patient_name,
+      );
+
       if (!report.is_read) await markRead(report.id);
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch {
-      Alert.alert('Erreur', 'Impossible d\'ouvrir le rapport. Vérifiez votre connexion.');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      Alert.alert(
+        'PDF enregistré',
+        `Le rapport a été téléchargé sur votre téléphone dans le dossier Rapports de l’application.\n\n` +
+          `Pour le retrouver : ${folderLabel}.`,
+        [{ text: 'OK' }],
+      );
+    } catch (e) {
+      Alert.alert('Erreur', getApiErrorMessage(e));
     } finally {
       setPdfLoading(null);
     }
@@ -186,14 +205,18 @@ export default function ReportsScreen() {
   ];
 
   return (
-    <View className="flex-1 bg-gray-50" style={{ paddingTop: insets.top }}>
+    <View className="flex-1 dark:bg-zinc-950" style={{ paddingTop: insets.top, backgroundColor: joyful.screenBg }}>
       {/* Header */}
-      <View className="bg-white px-4 pt-5 pb-3 border-b border-gray-100">
+      <View style={{
+        backgroundColor: joyful.stepBarBg,
+        paddingHorizontal: 16, paddingTop: 20, paddingBottom: 12,
+        borderBottomWidth: 2, borderBottomColor: joyful.tabBarBorder,
+      }}>
         <View className="flex-row items-center justify-between mb-3">
-          <Text className="text-xl font-bold text-gray-900">Mes rapports ECG</Text>
+          <Text className="text-xl font-bold dark:text-violet-200" style={{ color: joyful.primaryDark }}>Mes rapports ECG</Text>
           {unreadCount > 0 && (
             <TouchableOpacity onPress={handleMarkAllRead}>
-              <Text className="text-indigo-600 text-xs font-medium">Tout lire</Text>
+              <Text className="text-indigo-600 dark:text-violet-300 text-xs font-medium">Tout lire</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -204,11 +227,11 @@ export default function ReportsScreen() {
             <TouchableOpacity
               key={f.key}
               className={`px-3 py-1.5 rounded-full border ${
-                filter === f.key ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-200'
+                filter === f.key ? 'bg-indigo-600 border-indigo-600' : 'bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-600'
               }`}
               onPress={() => setFilter(f.key)}
             >
-              <Text className={`text-xs font-medium ${filter === f.key ? 'text-white' : 'text-gray-600'}`}>
+              <Text className={`text-xs font-medium ${filter === f.key ? 'text-white' : 'text-gray-600 dark:text-zinc-300'}`}>
                 {f.label}
               </Text>
             </TouchableOpacity>
@@ -248,7 +271,7 @@ export default function ReportsScreen() {
             {filtered.length === 0 ? (
               <View className="items-center mt-16">
                 <Text className="text-4xl mb-3">📄</Text>
-                <Text className="text-gray-600 font-medium text-center">
+                <Text className="text-gray-600 dark:text-zinc-400 font-medium text-center">
                   {filter === 'unread'
                     ? 'Tous les rapports ont été lus.'
                     : filter === 'urgent'
@@ -262,10 +285,8 @@ export default function ReportsScreen() {
                   key={r.id}
                   report={r}
                   onRead={markRead}
-                  onOpenPdf={pdfLoading === r.id
-                    ? () => {}
-                    : handleOpenPdf
-                  }
+                  onDownloadPdf={handleDownloadPdf}
+                  pdfOpening={pdfLoading === r.id}
                 />
               ))
             )}

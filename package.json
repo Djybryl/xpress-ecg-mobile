@@ -10,6 +10,8 @@
     "start:localhost": "expo start --port 19000 --localhost",
     "start:lan": "expo start --port 19000 --lan",
     "start:tunnel": "node scripts/start-expo.cjs start --tunnel --port 19000",
+    "start:tunnel:devclient": "node scripts/start-expo.cjs start --tunnel --dev-client --port 19000",
+    "start:tunnel:devclient:utf8": "cmd /c \"chcp 65001>nul && npm run start:tunnel:devclient\"",
     "android": "expo start --android --port 19000 --lan",
     "ios": "expo start --ios --port 19000 --lan",
     "web": "expo start --web --port 19000",

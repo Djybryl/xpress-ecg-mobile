@@ -45,7 +45,7 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-indigo-700"
+      className="flex-1 bg-indigo-700 dark:bg-indigo-950"
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
@@ -62,17 +62,17 @@ export default function LoginScreen() {
         </View>
 
         {/* Formulaire */}
-        <View className="flex-1 bg-white rounded-t-3xl px-6 pt-8 pb-10">
-          <Text className="text-gray-800 text-2xl font-bold mb-1">Connexion</Text>
-          <Text className="text-gray-500 text-sm mb-8">
+        <View className="flex-1 bg-white dark:bg-zinc-900 rounded-t-3xl px-6 pt-8 pb-10">
+          <Text className="text-gray-800 dark:text-zinc-100 text-2xl font-bold mb-1">Connexion</Text>
+          <Text className="text-gray-500 dark:text-zinc-400 text-sm mb-8">
             Connectez-vous pour gérer vos demandes ECG
           </Text>
 
           {/* Email */}
           <View className="mb-4">
-            <Text className="text-gray-600 text-sm font-medium mb-1.5">Adresse email</Text>
+            <Text className="text-gray-600 dark:text-zinc-300 text-sm font-medium mb-1.5">Adresse email</Text>
             <TextInput
-              className="border border-gray-200 rounded-xl px-4 h-12 text-sm bg-gray-50 text-gray-900"
+              className="border border-gray-200 dark:border-zinc-600 rounded-xl px-4 h-12 text-sm bg-gray-50 dark:bg-zinc-800 text-gray-900 dark:text-zinc-100"
               placeholder="dr.dupont@cabinet.fr"
               placeholderTextColor="#9ca3af"
               value={email}
@@ -86,10 +86,10 @@ export default function LoginScreen() {
 
           {/* Mot de passe */}
           <View className="mb-6">
-            <Text className="text-gray-600 text-sm font-medium mb-1.5">Mot de passe</Text>
-            <View className="flex-row border border-gray-200 rounded-xl bg-gray-50 overflow-hidden">
+            <Text className="text-gray-600 dark:text-zinc-300 text-sm font-medium mb-1.5">Mot de passe</Text>
+            <View className="flex-row border border-gray-200 dark:border-zinc-600 rounded-xl bg-gray-50 dark:bg-zinc-800 overflow-hidden">
               <TextInput
-                className="flex-1 px-4 h-12 text-sm text-gray-900"
+                className="flex-1 px-4 h-12 text-sm text-gray-900 dark:text-zinc-100"
                 placeholder="••••••••"
                 placeholderTextColor="#9ca3af"
                 value={password}
@@ -103,7 +103,7 @@ export default function LoginScreen() {
                 className="px-4 items-center justify-center"
                 onPress={() => setShowPassword(v => !v)}
               >
-                <Text className="text-gray-400 text-xs">{showPassword ? 'Cacher' : 'Voir'}</Text>
+                <Text className="text-gray-400 dark:text-zinc-500 text-xs">{showPassword ? 'Cacher' : 'Voir'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -124,7 +124,7 @@ export default function LoginScreen() {
           {/* Biométrie */}
           {canUseBiometrics && (
             <TouchableOpacity
-              className="border border-indigo-200 bg-indigo-50 rounded-xl h-12 items-center justify-center flex-row gap-2 mb-6"
+              className="border border-indigo-200 dark:border-violet-700 bg-indigo-50 dark:bg-violet-950/80 rounded-xl h-12 items-center justify-center flex-row gap-2 mb-6"
               onPress={handleBiometric}
               disabled={bioLoading}
               activeOpacity={0.8}
@@ -136,7 +136,7 @@ export default function LoginScreen() {
                     <Text className="text-lg">
                       {Platform.OS === 'ios' ? '🔒' : '👆'}
                     </Text>
-                    <Text className="text-indigo-700 font-medium text-sm">
+                    <Text className="text-indigo-700 dark:text-violet-200 font-medium text-sm">
                       {Platform.OS === 'ios' ? 'Se connecter avec Face ID' : 'Se connecter avec l\'empreinte'}
                     </Text>
                   </>
@@ -145,7 +145,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
           )}
 
-          <Text className="text-center text-gray-400 text-xs">
+          <Text className="text-center text-gray-400 dark:text-zinc-500 text-xs">
             En vous connectant, vous acceptez les conditions d'utilisation de Xpress ECG
           </Text>
         </View>

@@ -144,6 +144,14 @@ function printTunnelBanner(port) {
   console.log('');
   console.log('  N utilisez PAS les URLs exp:// avec IP locale (192.168 / 10.x).');
   console.log('  L URL exp://....exp.direct apparait APRES "Tunnel ready." (patience ~2 min).');
+  console.log('');
+  console.log('  OU TROUVER L URL / QR :');
+  console.log('  - Faites DEFILER le terminal vers le HAUT : ligne "Metro waiting on" + URL soulignee.');
+  console.log('  - Cliquez DANS la fenetre du terminal puis touche ** c ** (reafficher le QR projet).');
+  console.log('  - Touche ** ? ** : liste des raccourcis Expo.');
+  console.log('  - Si le QR est vide ou casse : PowerShell -> chcp 65001 puis relancer, ou utiliser cmd.exe');
+  console.log('    ou Windows Terminal (police monospace). Eviter terminal integre Cursor si besoin.');
+  console.log('');
   console.log('  Conseils si echec : npx expo login | VPN desactive | reseau stable');
   console.log('  Android USB : si erreur ADB, debranchez le cable ou installez adb reverse.');
   console.log('');

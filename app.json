@@ -15,10 +15,13 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.dnr.xpressecg",
       "infoPlist": {
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true,
         "NSCameraUsageDescription": "Xpress ECG utilise la caméra pour photographier les tracés ECG.",
-        "NSPhotoLibraryUsageDescription": "Xpress ECG accède à la galerie pour sélectionner des images ECG.",
+        "NSPhotoLibraryUsageDescription": "Xpress ECG accède à vos photos pour vous permettre de sélectionner une image d'ECG.",
+        "NSPhotoLibraryAddUsageDescription": "Xpress ECG peut enregistrer une image dans votre photothèque lorsque vous le choisissez.",
         "NSFaceIDUsageDescription": "Xpress ECG utilise Face ID pour sécuriser votre accès.",
-        "NSMicrophoneUsageDescription": "Requis par l'API caméra sur iOS.",
+        "NSMicrophoneUsageDescription": "Xpress ECG n’utilise pas le micro pour les ECG ; cette autorisation peut être requise par le système pour l’aperçu caméra.",
         "UIBackgroundModes": [
           "remote-notification"
         ]
@@ -32,17 +35,14 @@
       },
       "package": "com.dnr.xpressecg",
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "USE_BIOMETRIC",
-        "USE_FINGERPRINT",
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE",
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.USE_BIOMETRIC",
-        "android.permission.USE_FINGERPRINT"
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
       ]
     },
     "web": {
@@ -55,13 +55,23 @@
       [
         "react-native-document-scanner-plugin",
         {
-          "cameraPermission": "Xpress-ECG a besoin d'accéder à votre caméra pour photographier les ECG."
+          "cameraPermission": "Xpress ECG utilise la caméra pour scanner ou photographier les tracés ECG."
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Xpress ECG utilise la caméra pour photographier les tracés ECG."
+          "cameraPermission": "Xpress ECG utilise la caméra pour photographier les tracés ECG.",
+          "microphonePermission": "Non utilisé pour les ECG.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Xpress ECG accède à vos photos pour vous permettre de choisir une image d'ECG.",
+          "cameraPermission": "Xpress ECG utilise la caméra pour photographier les tracés ECG.",
+          "microphonePermission": false
         }
       ],
       [

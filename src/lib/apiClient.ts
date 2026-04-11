@@ -41,6 +41,7 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly code: string,
     message: string,
+    public readonly details?: unknown,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -49,16 +50,47 @@ export class ApiError extends Error {
 
 export function getApiErrorMessage(err: unknown): string {
   if (err instanceof ApiError) {
+    switch (err.code) {
+      case 'QUOTA_EXCEEDED':
+        return 'Quota mensuel atteint. Contactez votre administrateur.';
+      case 'PRESCRIBER_GATE_BLOCKED':
+        return 'Votre compte prescripteur n\'est pas encore validé.';
+      case 'REQUEST_TIMEOUT':
+        return 'Délai dépassé — le serveur met trop de temps à répondre.';
+      case 'SERVER_UNREACHABLE':
+        return 'Serveur non disponible — vérifiez votre connexion réseau.';
+      case 'SESSION_EXPIRED':
+        return 'Session expirée — veuillez vous reconnecter.';
+      default: break;
+    }
     switch (err.status) {
-      case 0:   return 'Serveur injoignable. Vérifiez votre connexion réseau.';
+      case 0:   return 'Connexion impossible — vérifiez votre réseau.';
       case 403: return err.message || 'Accès refusé.';
       case 404: return 'Ressource introuvable.';
+      case 413: return 'Le fichier est trop volumineux (max 100 Mo).';
       case 500: return 'Erreur serveur. Réessayez plus tard.';
       default:  return err.message || 'Une erreur inattendue s\'est produite.';
     }
   }
   if (err instanceof Error) return err.message;
   return 'Une erreur inattendue s\'est produite.';
+}
+
+export function getApiErrorAction(err: unknown): 'retry' | 'upgrade' | 'login' | null {
+  if (!(err instanceof ApiError)) return 'retry';
+  switch (err.code) {
+    case 'QUOTA_EXCEEDED':
+    case 'PRESCRIBER_GATE_BLOCKED':
+      return 'upgrade';
+    case 'SESSION_EXPIRED':
+    case 'REFRESH_FAILED':
+      return 'login';
+    case 'SERVER_UNREACHABLE':
+    case 'REQUEST_TIMEOUT':
+      return 'retry';
+    default:
+      return err.status >= 500 ? 'retry' : null;
+  }
 }
 
 // ─── Listeners session expirée ──────────────────────────────────────────────
@@ -107,6 +139,8 @@ async function refreshAccessToken(): Promise<string> {
 
 // ─── Requête principale ─────────────────────────────────────────────────────
 
+const DEFAULT_TIMEOUT_MS = 30_000;
+
 async function request<T>(
   method: string,
   path: string,
@@ -115,9 +149,10 @@ async function request<T>(
     params?: Record<string, string | number | boolean | undefined>;
     isRetry?: boolean;
     formData?: FormData;
+    timeoutMs?: number;
   } = {},
 ): Promise<T> {
-  const { body, params, isRetry = false, formData } = options;
+  const { body, params, isRetry = false, formData, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
 
   const url = new URL(`${BASE_URL}/api/v1${path}`);
   if (params) {
@@ -133,11 +168,10 @@ async function request<T>(
     headers['Content-Type'] = 'application/json';
   }
 
-  const REQUEST_TIMEOUT_MS = 30_000;
   let res: Response;
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     res = await fetch(url.toString(), {
       method,
       headers,
@@ -172,9 +206,78 @@ async function request<T>(
       res.status,
       json.error?.code ?? 'UNKNOWN_ERROR',
       json.error?.message ?? `Erreur ${res.status}`,
+      json.error?.details,
     );
   }
   return json.data as T;
+}
+
+// ─── Upload avec progression (XMLHttpRequest) ───────────────────────────────
+
+const UPLOAD_TIMEOUT_MS = 120_000;
+
+export interface UploadOptions {
+  onProgress?: (percent: number) => void;
+  timeoutMs?: number;
+}
+
+async function uploadWithProgress<T>(
+  path: string,
+  formData: FormData,
+  options: UploadOptions = {},
+): Promise<T> {
+  const { onProgress, timeoutMs = UPLOAD_TIMEOUT_MS } = options;
+
+  const token = await tokenStorage.getAccess();
+  const url = `${BASE_URL}/api/v1${path}`;
+
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const timer = setTimeout(() => {
+      xhr.abort();
+      reject(new ApiError(0, 'REQUEST_TIMEOUT', 'Délai dépassé — l\'envoi a pris trop de temps.'));
+    }, timeoutMs);
+
+    if (xhr.upload && onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+    }
+
+    xhr.onload = () => {
+      clearTimeout(timer);
+      try {
+        const json: ApiResponse<T> = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300 && json.success) {
+          onProgress?.(100);
+          resolve(json.data as T);
+        } else {
+          reject(new ApiError(
+            xhr.status,
+            json.error?.code ?? 'UNKNOWN_ERROR',
+            json.error?.message ?? `Erreur ${xhr.status}`,
+            json.error?.details,
+          ));
+        }
+      } catch {
+        reject(new ApiError(xhr.status, 'PARSE_ERROR', `Réponse invalide (${xhr.status})`));
+      }
+    };
+
+    xhr.onerror = () => {
+      clearTimeout(timer);
+      reject(new ApiError(0, 'SERVER_UNREACHABLE', 'Serveur non disponible — vérifiez votre connexion.'));
+    };
+
+    xhr.onabort = () => {
+      clearTimeout(timer);
+      reject(new ApiError(0, 'REQUEST_TIMEOUT', 'Envoi annulé.'));
+    };
+
+    xhr.open('POST', url);
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.send(formData);
+  });
 }
 
 // ─── API publique ───────────────────────────────────────────────────────────
@@ -186,5 +289,6 @@ export const api = {
   patch:  <T>(path: string, body?: unknown) => request<T>('PATCH', path, { body }),
   put:    <T>(path: string, body?: unknown) => request<T>('PUT', path, { body }),
   delete: <T>(path: string) => request<T>('DELETE', path),
-  upload: <T>(path: string, formData: FormData) => request<T>('POST', path, { formData }),
+  upload: <T>(path: string, formData: FormData, options?: UploadOptions) =>
+    uploadWithProgress<T>(path, formData, options),
 };

@@ -2,13 +2,15 @@ import { useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useAuth } from '@/providers/AuthProvider';
+import { useTheme } from '@/providers/ThemeProvider';
 import {
-  View, ActivityIndicator, Text, StyleSheet,
+  View, ActivityIndicator, Text,
 } from 'react-native';
 
 export default function Index() {
   const router = useRouter();
   const { user, loading } = useAuth();
+  const { isDark } = useTheme();
   const navigated = useRef(false);
 
   useEffect(() => {
@@ -25,34 +27,32 @@ export default function Index() {
     }
   }, [loading, user, router]);
 
+  const wrapStyle = {
+    flex: 1,
+    backgroundColor: isDark ? '#312e81' : '#4f46e5',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 16,
+  };
+  const hintStyle = {
+    color: isDark ? '#c7d2fe' : '#e0e7ff',
+    fontSize: 16,
+    marginTop: 8,
+  };
+
   if (loading) {
     return (
-      <View style={styles.wrap}>
+      <View style={wrapStyle}>
         <ActivityIndicator color="#fff" size="large" />
-        <Text style={styles.hint}>Chargement…</Text>
+        <Text style={hintStyle}>Chargement…</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.wrap}>
+    <View style={wrapStyle}>
       <ActivityIndicator color="#fff" size="large" />
-      <Text style={styles.hint}>Ouverture…</Text>
+      <Text style={hintStyle}>Ouverture…</Text>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    flex: 1,
-    backgroundColor: '#4f46e5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-  },
-  hint: {
-    color: '#e0e7ff',
-    fontSize: 16,
-    marginTop: 8,
-  },
-});
