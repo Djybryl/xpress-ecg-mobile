@@ -11,12 +11,26 @@
  */
 import { useEffect, useCallback, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import type { UserRole } from '@/types/user';
 import { api } from '@/lib/apiClient';
+
+/**
+ * Vérifie si l'app tourne sur un vrai appareil physique sans expo-device
+ * (native module qui nécessite rebuild). On se base sur l'absence de
+ * l'émulateur Android et du simulateur iOS via les constantes Expo.
+ */
+function isPhysicalDevice(): boolean {
+  // Sur web, pas de push
+  if (Platform.OS === 'web') return false;
+  // Constants.isDevice est disponible sans module natif sur SDK 50+
+  const c = Constants as unknown as { isDevice?: boolean };
+  if (typeof c.isDevice === 'boolean') return c.isDevice;
+  // Fallback : si pas de deviceName connu, on suppose vrai appareil
+  return true;
+}
 
 // Comportement par défaut : afficher les notifs même si l'app est au premier plan
 Notifications.setNotificationHandler({
@@ -54,8 +68,8 @@ function resolveRoute(data: Record<string, unknown>, role: UserRole): string | n
 }
 
 async function registerForPushNotificationsAsync(role: UserRole): Promise<string | null> {
-  if (!Device.isDevice) {
-    console.warn('[Push] Notifications push non disponibles sur simulateur');
+  if (!isPhysicalDevice()) {
+    console.warn('[Push] Notifications push non disponibles sur simulateur/web');
     return null;
   }
 
