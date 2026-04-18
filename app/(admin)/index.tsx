@@ -18,8 +18,11 @@ function getGreeting(): string {
   return 'Bonsoir';
 }
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
+function timeAgo(dateStr: string | null | undefined): string {
+  if (dateStr == null || String(dateStr).trim() === '') return '—';
+  const t = new Date(dateStr).getTime();
+  if (Number.isNaN(t)) return '—';
+  const diff = Date.now() - t;
   const mins = Math.floor(diff / 60000);
   const hours = Math.floor(mins / 60);
   const days = Math.floor(hours / 24);
@@ -27,7 +30,7 @@ function timeAgo(dateStr: string): string {
   if (mins < 60) return `${mins} min`;
   if (hours < 24) return `${hours}h`;
   if (days < 7) return `${days}j`;
-  return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(new Date(dateStr));
+  return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(new Date(t));
 }
 
 interface StatCardProps {
@@ -68,7 +71,7 @@ function ActivityRow({ log }: { log: ActivityLogItem }) {
           {log.action}
         </Text>
         <Text className="text-[11px] text-gray-400 dark:text-zinc-500 mt-0.5">
-          {log.id.slice(0, 8)} · {timeAgo(log.updated_at)}
+          {log.id.slice(0, 8)} · {timeAgo(log.updated_at ?? log.created_at)}
         </Text>
       </View>
     </View>
@@ -81,7 +84,7 @@ export default function AdminHome() {
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
 
-  const { stats, logs, loading, refetch } = useAdminDashboard(!!user);
+  const { stats, logs, loading, error: dashError, refetch } = useAdminDashboard(!!user);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -121,6 +124,11 @@ export default function AdminHome() {
       </LinearGradient>
 
       <View style={{ marginTop: -16, paddingHorizontal: 16 }}>
+        {dashError ? (
+          <View className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-2xl p-3 mb-3">
+            <Text className="text-[13px] text-red-800 dark:text-red-200">{dashError}</Text>
+          </View>
+        ) : null}
         {/* Stats globales */}
         <View className="bg-white dark:bg-zinc-900 rounded-2xl p-4 mb-4 shadow-sm">
           <Text className="text-[11px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-3">

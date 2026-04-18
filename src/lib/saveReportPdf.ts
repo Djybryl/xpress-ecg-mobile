@@ -13,12 +13,45 @@ function sanitizeFilePart(s: string, maxLen: number): string {
   return (base || 'Patient').slice(0, maxLen);
 }
 
+function buildPdfFileName(reportId: string, patientName: string | null | undefined): string {
+  const slug = sanitizeFilePart(patientName ?? 'Patient', 36);
+  const idShort = reportId.replace(/-/g, '').slice(0, 12);
+  return `ECG_${slug}_${idShort}.pdf`;
+}
+
 /**
- * Télécharge le PDF depuis l’URL signée et l’enregistre dans le stockage persistant
- * de l’application (dossier Documents/Rapports). Aucune feuille de partage ni navigateur.
+ * Télécharge le PDF (URL signée) dans le cache applicatif — pour aperçu, partage, impression.
  */
-export async function saveReportPdfFromSignedUrl(
+export async function downloadReportPdfToCache(
   signedUrl: string,
+  reportId: string,
+  patientName: string | null | undefined,
+): Promise<string> {
+  const cache = FileSystem.cacheDirectory;
+  if (!cache) {
+    throw new Error('Espace cache indisponible sur cet appareil.');
+  }
+  const fileName = buildPdfFileName(reportId, patientName);
+  const destUri = `${cache}${fileName}`;
+  await FileSystem.deleteAsync(destUri, { idempotent: true });
+  const { status } = await FileSystem.downloadAsync(signedUrl, destUri);
+  if (status !== 200) {
+    throw new Error(`Échec du téléchargement du PDF (code ${status}).`);
+  }
+  return destUri;
+}
+
+function persistentFolderLabel(): string {
+  return Platform.OS === 'ios'
+    ? 'Fichiers > Sur mon iPhone > Xpress ECG > Rapports'
+    : 'Stockage de l’app Xpress ECG (dossier Rapports), accessible via l’app Fichiers sur certains appareils';
+}
+
+/**
+ * Copie un PDF local (ex. depuis le cache) vers Documents/Rapports.
+ */
+export async function copyLocalPdfToDocuments(
+  sourceUri: string,
   reportId: string,
   patientName: string | null | undefined,
 ): Promise<{ localUri: string; folderLabel: string }> {
@@ -33,9 +66,7 @@ export async function saveReportPdfFromSignedUrl(
     await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
   }
 
-  const slug = sanitizeFilePart(patientName ?? 'Patient', 36);
-  const idShort = reportId.replace(/-/g, '').slice(0, 12);
-  const fileName = `ECG_${slug}_${idShort}.pdf`;
+  const fileName = buildPdfFileName(reportId, patientName);
   const destUri = `${dir}${fileName}`;
 
   const existing = await FileSystem.getInfoAsync(destUri);
@@ -43,15 +74,19 @@ export async function saveReportPdfFromSignedUrl(
     await FileSystem.deleteAsync(destUri, { idempotent: true });
   }
 
-  const { status } = await FileSystem.downloadAsync(signedUrl, destUri);
-  if (status !== 200) {
-    throw new Error(`Échec du téléchargement du PDF (code ${status}).`);
-  }
+  await FileSystem.copyAsync({ from: sourceUri, to: destUri });
 
-  const folderLabel =
-    Platform.OS === 'ios'
-      ? 'Fichiers > Sur mon iPhone > Xpress ECG > Rapports'
-      : 'Fichiers / stockage de l’app (dossier Rapports)';
+  return { localUri: destUri, folderLabel: persistentFolderLabel() };
+}
 
-  return { localUri: destUri, folderLabel };
+/**
+ * Télécharge et enregistre directement dans Documents/Rapports (sans feuille de choix).
+ */
+export async function saveReportPdfFromSignedUrl(
+  signedUrl: string,
+  reportId: string,
+  patientName: string | null | undefined,
+): Promise<{ localUri: string; folderLabel: string }> {
+  const cacheUri = await downloadReportPdfToCache(signedUrl, reportId, patientName);
+  return copyLocalPdfToDocuments(cacheUri, reportId, patientName);
 }

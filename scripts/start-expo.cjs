@@ -4,6 +4,9 @@
  * Le probleme historique : sans REACT_NATIVE_PACKAGER_HOSTNAME, Expo ecrit
  * "127.0.0.1" dans le manifeste → le telephone essaie de telecharger
  * le bundle JS depuis lui-meme → echec.
+ *
+ * Defaut sans arguments : --lan (demarrage Metro plus rapide que --tunnel / ngrok).
+ * Hors reseau local : npm run start:tunnel
  */
 const { spawn, execSync } = require('child_process');
 const path = require('path');

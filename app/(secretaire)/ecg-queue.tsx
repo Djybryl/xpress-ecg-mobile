@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEcgValidationQueue } from '@/hooks/useEcgValidationQueue';
 import { api } from '@/lib/apiClient';
 import type { EcgRecordItem } from '@/hooks/useEcgList';
+import { useAuth } from '@/providers/AuthProvider';
 
 const FILTER_CHIPS: { key: string; label: string }[] = [
   { key: 'all',       label: 'Tous' },
@@ -48,6 +49,7 @@ function StatusBadge({ status }: { status: EcgRecordItem['status'] }) {
 }
 
 export default function SecretaireEcgQueue() {
+  const { user } = useAuth();
   const { colors: joyful } = useTheme();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState('all');
@@ -56,7 +58,11 @@ export default function SecretaireEcgQueue() {
   const [validating, setValidating] = useState<string | null>(null);
 
   const statusParam = filter === 'all' ? undefined : filter;
-  const { records, total, loading, refetch } = useEcgValidationQueue(statusParam, 200);
+  const { records, total, loading, refetch } = useEcgValidationQueue(
+    statusParam,
+    200,
+    user?.hospitalId ?? null,
+  );
 
   const filtered = useMemo(() => {
     if (!search.trim()) return records;

@@ -53,8 +53,13 @@ export default function SecretaireHome() {
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
 
-  const { stats, loading: dashLoading, refetch: refetchDash } = useSecretaireDashboard(!!user);
-  const { records: pendingRecords, loading: queueLoading, refetch: refetchQueue } = useEcgValidationQueue('pending', 10);
+  const hospitalId = user?.hospitalId ?? null;
+  const { stats, loading: dashLoading, refetch: refetchDash } = useSecretaireDashboard(!!user, hospitalId);
+  const { records: pendingRecords, loading: queueLoading, refetch: refetchQueue } = useEcgValidationQueue(
+    'pending',
+    10,
+    hospitalId,
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -95,6 +100,14 @@ export default function SecretaireHome() {
       </LinearGradient>
 
       <View style={{ marginTop: -16, paddingHorizontal: 16 }}>
+        {!hospitalId && (
+          <View className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-3 mb-3">
+            <Text className="text-[12px] text-amber-900 dark:text-amber-100">
+              Aucun établissement n&apos;est rattaché à votre compte : les compteurs et la file ECG peuvent
+              inclure tous les dossiers de la plateforme. Contactez un administrateur pour associer un hôpital.
+            </Text>
+          </View>
+        )}
         {/* Stats card */}
         <View className="bg-white dark:bg-zinc-900 rounded-2xl p-4 mb-4 shadow-sm">
           <Text className="text-[11px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-3">
@@ -128,11 +141,11 @@ export default function SecretaireHome() {
         <Text className="text-[11px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-3">
           Actions rapides
         </Text>
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={() => router.push('/(secretaire)/ecg-queue' as Href)}
-            className="flex-1 bg-white dark:bg-zinc-900 rounded-2xl p-4 items-center shadow-sm"
+            className="flex-1 min-w-[44%] bg-white dark:bg-zinc-900 rounded-2xl p-4 items-center shadow-sm"
           >
             <View style={{ backgroundColor: '#fef3c7', width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
               <Ionicons name="list" size={20} color="#d97706" />
@@ -144,13 +157,29 @@ export default function SecretaireHome() {
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={() => router.push('/(secretaire)/prescribers' as Href)}
-            className="flex-1 bg-white dark:bg-zinc-900 rounded-2xl p-4 items-center shadow-sm"
+            className="flex-1 min-w-[44%] bg-white dark:bg-zinc-900 rounded-2xl p-4 items-center shadow-sm"
           >
             <View style={{ backgroundColor: '#ede9fe', width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
               <Ionicons name="people" size={20} color="#7c3aed" />
             </View>
             <Text className="text-[12px] font-bold text-gray-800 dark:text-zinc-100 text-center">Prescripteurs</Text>
             <Text className="text-[10px] text-gray-500 dark:text-zinc-400 mt-1 text-center">Dossiers en attente</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => router.push('/(secretaire)/subscriptions' as Href)}
+            className="flex-1 bg-white dark:bg-zinc-900 rounded-2xl p-4 flex-row items-center shadow-sm"
+          >
+            <View style={{ backgroundColor: '#e0e7ff', width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+              <Ionicons name="pie-chart" size={20} color="#4338ca" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text className="text-[12px] font-bold text-gray-800 dark:text-zinc-100">Quota & abonnement</Text>
+              <Text className="text-[10px] text-gray-500 dark:text-zinc-400 mt-0.5">Vue lecture seule</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
           </TouchableOpacity>
         </View>
 

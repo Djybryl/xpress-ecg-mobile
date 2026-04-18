@@ -7,7 +7,7 @@ export interface SecretaireStats {
   total_today: number;
 }
 
-export function useSecretaireDashboard(enabled: boolean) {
+export function useSecretaireDashboard(enabled: boolean, hospitalId?: string | null) {
   const [stats, setStats] = useState<SecretaireStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,14 +17,18 @@ export function useSecretaireDashboard(enabled: boolean) {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.get<SecretaireStats>('/dashboard/stats');
+      const params =
+        hospitalId != null && hospitalId !== ''
+          ? { hospital_id: hospitalId }
+          : undefined;
+      const data = await api.get<SecretaireStats>('/dashboard/stats', params);
       setStats(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erreur');
     } finally {
       setLoading(false);
     }
-  }, [enabled]);
+  }, [enabled, hospitalId]);
 
   useEffect(() => {
     void load();

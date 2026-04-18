@@ -74,6 +74,15 @@ export default function SecretaireTabLayout() {
         options={{ title: 'Dossiers', tabBarIcon: ({ focused }) => <TabIcon name="people" label="Dossiers" focused={focused} color={joyful.tabReports} /> }}
       />
       <Tabs.Screen
+        name="subscriptions"
+        options={{
+          title: 'Quota',
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name="pie-chart" label="Quota" focused={focused} color={joyful.tabReports} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{ title: 'Profil', tabBarIcon: ({ focused }) => <TabIcon name="person" label="Profil" focused={focused} color={joyful.tabProfile} /> }}
       />

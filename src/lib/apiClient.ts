@@ -4,7 +4,11 @@
  */
 import * as SecureStore from 'expo-secure-store';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3001';
+/** Base API sans slash final — doit pointer vers le tunnel ngrok du backend (port 3001), pas vers Expo. */
+export const getResolvedApiBaseUrl = (): string =>
+  (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3001').replace(/\/+$/, '');
+
+const BASE_URL = getResolvedApiBaseUrl();
 
 const TOKEN_KEY = 'xecg-access-token';
 const REFRESH_KEY = 'xecg-refresh-token';
@@ -122,9 +126,17 @@ async function refreshAccessToken(): Promise<string> {
 
     const res = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+      },
       body: JSON.stringify({ refreshToken }),
     });
+    const ct = res.headers.get('content-type') ?? '';
+    if (!ct.includes('application/json')) {
+      await tokenStorage.clear();
+      throw new ApiError(res.status, 'NOT_JSON', 'Réponse refresh non-JSON — vérifiez EXPO_PUBLIC_API_URL et le tunnel ngrok du backend.');
+    }
     const json: ApiResponse<{ tokens: { accessToken: string; refreshToken: string } }> = await res.json();
 
     if (!res.ok || !json.success || !json.data?.tokens?.accessToken) {
@@ -139,7 +151,14 @@ async function refreshAccessToken(): Promise<string> {
 
 // ─── Requête principale ─────────────────────────────────────────────────────
 
-const DEFAULT_TIMEOUT_MS = 30_000;
+/**
+ * Délai par défaut : tunnels ngrok / mobile peuvent dépasser 10 s (cold start, réseau).
+ * Erreurs explicites via REQUEST_TIMEOUT plutôt qu’échecs en chaîne.
+ */
+const DEFAULT_TIMEOUT_MS = 25_000;
+
+/** Connexion initiale et restauration session : plus tolérant au tunnel. */
+export const AUTH_REQUEST_TIMEOUT_MS = 45_000;
 
 async function request<T>(
   method: string,
@@ -162,17 +181,22 @@ async function request<T>(
   }
 
   const headers: Record<string, string> = {};
+  // Bypass ngrok browser-warning page (tunnel gratuit) — requis pour toutes les requêtes mobiles
+  headers['ngrok-skip-browser-warning'] = 'true';
   const token = await tokenStorage.getAccess();
   if (token) headers['Authorization'] = `Bearer ${token}`;
   if (!formData && ['POST', 'PUT', 'PATCH'].includes(method)) {
     headers['Content-Type'] = 'application/json';
   }
 
+  const fullUrl = url.toString();
+  if (__DEV__) console.log(`[API] ${method} ${fullUrl}`);
+
   let res: Response;
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    res = await fetch(url.toString(), {
+    res = await fetch(fullUrl, {
       method,
       headers,
       body: formData ?? (body ? JSON.stringify(body) : undefined),
@@ -180,10 +204,21 @@ async function request<T>(
     });
     clearTimeout(timeoutId);
   } catch (err) {
+    if (__DEV__) console.error(`[API] FETCH ERROR ${method} ${fullUrl}`, err);
     if (err instanceof Error && err.name === 'AbortError') {
-      throw new ApiError(0, 'REQUEST_TIMEOUT', 'Délai dépassé — le serveur met trop de temps à répondre.');
+      throw new ApiError(0, 'REQUEST_TIMEOUT', `Délai dépassé (${timeoutMs / 1000}s) — backend non démarré ou connexion lente.`);
     }
-    throw new ApiError(0, 'SERVER_UNREACHABLE', 'Serveur non disponible — vérifiez votre connexion.');
+    throw new ApiError(0, 'SERVER_UNREACHABLE', 'Serveur non disponible — vérifiez que le backend est démarré sur le port 3001.');
+  }
+
+  if (__DEV__) console.log(`[API] ${res.status} ${method} ${path}`);
+
+  // Si la réponse est du HTML (page ngrok ou 404 serveur), ne pas tenter .json()
+  const contentType = res.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    const text = await res.text();
+    if (__DEV__) console.error(`[API] Réponse non-JSON (${contentType}) : ${text.substring(0, 200)}`);
+    throw new ApiError(res.status, 'NOT_JSON', `Le serveur a retourné du ${contentType || 'contenu inconnu'} au lieu de JSON (status ${res.status}). URL: ${fullUrl}`);
   }
 
   if (res.status === 401 && !isRetry) {
@@ -214,7 +249,7 @@ async function request<T>(
 
 // ─── Upload avec progression (XMLHttpRequest) ───────────────────────────────
 
-const UPLOAD_TIMEOUT_MS = 120_000;
+const UPLOAD_TIMEOUT_MS = 120_000; // Upload fichiers ECG : garder long
 
 export interface UploadOptions {
   onProgress?: (percent: number) => void;
@@ -275,6 +310,7 @@ async function uploadWithProgress<T>(
     };
 
     xhr.open('POST', url);
+    xhr.setRequestHeader('ngrok-skip-browser-warning', 'true');
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.send(formData);
   });
@@ -282,13 +318,22 @@ async function uploadWithProgress<T>(
 
 // ─── API publique ───────────────────────────────────────────────────────────
 
+export type ApiRequestOptions = { timeoutMs?: number };
+
 export const api = {
-  get:    <T>(path: string, params?: Record<string, string | number | boolean | undefined>) =>
-    request<T>('GET', path, { params }),
-  post:   <T>(path: string, body?: unknown) => request<T>('POST', path, { body }),
-  patch:  <T>(path: string, body?: unknown) => request<T>('PATCH', path, { body }),
-  put:    <T>(path: string, body?: unknown) => request<T>('PUT', path, { body }),
-  delete: <T>(path: string) => request<T>('DELETE', path),
+  get: <T>(
+    path: string,
+    params?: Record<string, string | number | boolean | undefined>,
+    options?: ApiRequestOptions,
+  ) => request<T>('GET', path, { params, timeoutMs: options?.timeoutMs }),
+  post: <T>(path: string, body?: unknown, options?: ApiRequestOptions) =>
+    request<T>('POST', path, { body, timeoutMs: options?.timeoutMs }),
+  patch: <T>(path: string, body?: unknown, options?: ApiRequestOptions) =>
+    request<T>('PATCH', path, { body, timeoutMs: options?.timeoutMs }),
+  put: <T>(path: string, body?: unknown, options?: ApiRequestOptions) =>
+    request<T>('PUT', path, { body, timeoutMs: options?.timeoutMs }),
+  delete: <T>(path: string, options?: ApiRequestOptions) =>
+    request<T>('DELETE', path, { timeoutMs: options?.timeoutMs }),
   upload: <T>(path: string, formData: FormData, options?: UploadOptions) =>
     uploadWithProgress<T>(path, formData, options),
 };

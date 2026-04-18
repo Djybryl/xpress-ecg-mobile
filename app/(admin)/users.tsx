@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useUsersList, type UserListItem, type UserRole } from '@/hooks/useUsersList';
 import { api } from '@/lib/apiClient';
+import { useAuth } from '@/providers/AuthProvider';
 
 const ROLE_CHIPS: { key: string; label: string }[] = [
   { key: 'all',        label: 'Tous' },
@@ -53,6 +54,7 @@ function getInitials(name: string): string {
 }
 
 export default function AdminUsers() {
+  const { user: currentUser } = useAuth();
   const { colors: joyful } = useTheme();
   const insets = useSafeAreaInsets();
   const [roleFilter, setRoleFilter] = useState('all');
@@ -78,6 +80,10 @@ export default function AdminUsers() {
   }, [refetch]);
 
   const doToggle = useCallback(async (user: UserListItem) => {
+    if (currentUser?.id && user.id === currentUser.id) {
+      Alert.alert('Action impossible', 'Vous ne pouvez pas désactiver votre propre compte depuis l’application.');
+      return;
+    }
     const isActive = user.status === 'active';
     const endpoint = isActive
       ? `/users/${user.id}/deactivate`
@@ -106,7 +112,7 @@ export default function AdminUsers() {
         },
       ],
     );
-  }, [refetch]);
+  }, [refetch, currentUser?.id]);
 
   return (
     <View className="flex-1 bg-gray-50 dark:bg-zinc-950" style={{ paddingTop: insets.top }}>
@@ -197,30 +203,36 @@ export default function AdminUsers() {
                 </View>
               </View>
 
-              {/* Toggle button */}
-              <TouchableOpacity
-                onPress={() => doToggle(user)}
-                disabled={actionLoading === user.id}
-                style={{
-                  backgroundColor: user.status === 'active' ? '#fee2e2' : '#d1fae5',
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 10,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minWidth: 32,
-                }}
-              >
-                {actionLoading === user.id ? (
-                  <ActivityIndicator size="small" color={user.status === 'active' ? '#dc2626' : '#065f46'} />
-                ) : (
-                  <Ionicons
-                    name={user.status === 'active' ? 'ban' : 'checkmark-circle'}
-                    size={16}
-                    color={user.status === 'active' ? '#dc2626' : '#065f46'}
-                  />
-                )}
-              </TouchableOpacity>
+              {/* Toggle button (pas sur son propre compte) */}
+              {currentUser?.id === user.id ? (
+                <View style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
+                  <Text style={{ fontSize: 9, color: '#9ca3af', fontWeight: '600' }}>Vous</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => doToggle(user)}
+                  disabled={actionLoading === user.id}
+                  style={{
+                    backgroundColor: user.status === 'active' ? '#fee2e2' : '#d1fae5',
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: 32,
+                  }}
+                >
+                  {actionLoading === user.id ? (
+                    <ActivityIndicator size="small" color={user.status === 'active' ? '#dc2626' : '#065f46'} />
+                  ) : (
+                    <Ionicons
+                      name={user.status === 'active' ? 'ban' : 'checkmark-circle'}
+                      size={16}
+                      color={user.status === 'active' ? '#dc2626' : '#065f46'}
+                    />
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         ))}

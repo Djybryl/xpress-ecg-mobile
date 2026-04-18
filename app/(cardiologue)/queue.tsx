@@ -8,6 +8,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/providers/AuthProvider';
 import { useCardiologistQueue } from '@/hooks/useCardiologistQueue';
+import { ECGTraceView } from '@/components/ecg/ECGTraceView';
 import type { EcgRecordItem } from '@/hooks/useEcgList';
 
 const FILTER_CHIPS: { key: string; label: string }[] = [
@@ -52,6 +53,7 @@ export default function CardiologueQueueScreen() {
   const [search, setSearch] = useState('');
   const [chip, setChip] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
+  const [expandedTrace, setExpandedTrace] = useState<string | null>(null);
 
   const { records, loading, refetch } = useCardiologistQueue(user?.id, 150);
 
@@ -140,41 +142,67 @@ export default function CardiologueQueueScreen() {
             const isUrgent = item.urgency === 'urgent';
             const other = item.assigned_to && item.assigned_to !== user?.id;
             return (
-              <TouchableOpacity
+              <View
                 key={item.id}
-                className={`bg-white dark:bg-zinc-900 rounded-2xl p-4 mb-3 border ${
+                className={`bg-white dark:bg-zinc-900 rounded-2xl mb-3 border overflow-hidden ${
                   isUrgent ? 'border-red-200 dark:border-red-900' : 'border-gray-100 dark:border-zinc-800'
                 } ${other ? 'opacity-80' : ''}`}
-                activeOpacity={0.8}
-                onPress={() => router.push(`/(cardiologue)/interpret/${item.id}` as Href)}
               >
-                <View className="flex-row items-start">
-                  <View className={`w-10 h-10 rounded-full ${isUrgent ? 'bg-red-100' : 'bg-violet-100'} items-center justify-center mr-3`}>
-                    <Text className={`text-xs font-bold ${isUrgent ? 'text-red-600' : 'text-violet-700'}`}>
-                      {(item.patient_name ?? 'P').slice(0, 2).toUpperCase()}
-                    </Text>
-                  </View>
-                  <View className="flex-1">
-                    <View className="flex-row items-center justify-between mb-1">
-                      <Text className="text-sm font-semibold text-gray-900 dark:text-zinc-100 flex-1 mr-2" numberOfLines={1}>
-                        {item.patient_name}
-                        {isUrgent ? ' ⚡' : ''}
+                <TouchableOpacity
+                  className="p-4"
+                  activeOpacity={0.8}
+                  onPress={() => router.push(`/(cardiologue)/interpret/${item.id}` as Href)}
+                >
+                  <View className="flex-row items-start">
+                    <View className={`w-10 h-10 rounded-full ${isUrgent ? 'bg-red-100' : 'bg-violet-100'} items-center justify-center mr-3`}>
+                      <Text className={`text-xs font-bold ${isUrgent ? 'text-red-600' : 'text-violet-700'}`}>
+                        {(item.patient_name ?? 'P').slice(0, 2).toUpperCase()}
                       </Text>
-                      <StatusBadge status={item.status} />
                     </View>
-                    <Text className="text-xs text-gray-500 dark:text-zinc-400 mb-1">{item.reference}</Text>
-                    {item.clinical_context ? (
-                      <Text className="text-xs text-gray-500 dark:text-zinc-400 mb-1" numberOfLines={2}>
-                        {item.clinical_context}
+                    <View className="flex-1">
+                      <View className="flex-row items-center justify-between mb-1">
+                        <Text className="text-sm font-semibold text-gray-900 dark:text-zinc-100 flex-1 mr-2" numberOfLines={1}>
+                          {item.patient_name}
+                          {isUrgent ? ' ⚡' : ''}
+                        </Text>
+                        <StatusBadge status={item.status} />
+                      </View>
+                      <Text className="text-xs text-gray-500 dark:text-zinc-400 mb-1">{item.reference}</Text>
+                      {item.clinical_context ? (
+                        <Text className="text-xs text-gray-500 dark:text-zinc-400 mb-1" numberOfLines={2}>
+                          {item.clinical_context}
+                        </Text>
+                      ) : null}
+                      <Text className="text-xs text-gray-400 dark:text-zinc-500">
+                        {item.medical_center} · {timeAgo(item.created_at)}
+                        {other ? ' · autre cardiologue' : ''}
                       </Text>
-                    ) : null}
-                    <Text className="text-xs text-gray-400 dark:text-zinc-500">
-                      {item.medical_center} · {timeAgo(item.created_at)}
-                      {other ? ' · autre cardiologue' : ''}
-                    </Text>
+                    </View>
                   </View>
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
+
+                {/* Bouton aperçu tracé */}
+                <TouchableOpacity
+                  className="flex-row items-center justify-center py-1.5 border-t border-gray-50 dark:border-zinc-800"
+                  onPress={() => setExpandedTrace(prev => prev === item.id ? null : item.id)}
+                  activeOpacity={0.7}
+                >
+                  <Text className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 mr-1">
+                    {expandedTrace === item.id ? 'Masquer le tracé' : 'Aperçu tracé'}
+                  </Text>
+                </TouchableOpacity>
+
+                {expandedTrace === item.id && (
+                  <View className="px-2 pb-2">
+                    <ECGTraceView
+                      ecgId={item.id}
+                      files={(item as EcgRecordItem & { files?: { id: string; filename: string; file_url?: string; file_type: string }[] }).files}
+                      height={150}
+                      compact
+                    />
+                  </View>
+                )}
+              </View>
             );
           })
         )}

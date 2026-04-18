@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/providers/ThemeProvider';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { ToastProvider } from '@/providers/ToastProvider';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { I18nProvider } from '@/i18n';
 
 /** Composant interne qui accède au contexte auth pour initialiser les push. */
 function PushInit() {
@@ -21,16 +22,23 @@ function PushInit() {
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider>
-        <AuthProvider>
-          <ToastProvider>
-            <PushInit />
-            <StatusBar style="light" />
-            {/* Ne pas lister manuellement les ecrans : sinon `app/index.tsx` peut ne jamais etre monte (ecran fige / splash). */}
-            <Stack screenOptions={{ headerShown: false }} />
-          </ToastProvider>
-        </AuthProvider>
-      </ThemeProvider>
+      <I18nProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <ToastProvider>
+              <PushInit />
+              <StatusBar style="light" />
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  animation: 'slide_from_right',
+                  animationDuration: 220,
+                }}
+              />
+            </ToastProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </I18nProvider>
     </GestureHandlerRootView>
   );
 }

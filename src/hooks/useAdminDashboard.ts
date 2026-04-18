@@ -10,13 +10,17 @@ export interface AdminStats {
   completed_ecg: number;
 }
 
+/** Aligné sur GET /dashboard/activity-logs (voir dashboard.service — champ date principal : created_at) */
 export interface ActivityLogItem {
   id: string;
   action: string;
-  referring_doctor_id: string | null;
-  assigned_to: string | null;
+  referring_doctor_id?: string | null;
+  assigned_to?: string | null;
+  user_id?: string;
+  ecg_record_id?: string | null;
+  details?: string;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 export function useAdminDashboard(enabled = true) {
@@ -30,17 +34,23 @@ export function useAdminDashboard(enabled = true) {
     setLoading(true);
     setError(null);
     try {
-      const [statsData, logsRes] = await Promise.all([
-        api.get<AdminStats>('/dashboard/stats'),
-        api.get<{ logs?: ActivityLogItem[] } | ActivityLogItem[]>('/dashboard/activity-logs', { limit: 15 }),
-      ]);
+      const statsData = await api.get<AdminStats>('/dashboard/stats');
       setStats(statsData);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur statistiques');
+      setStats(null);
+    }
+    try {
+      const logsRes = await api.get<{ logs?: ActivityLogItem[] } | ActivityLogItem[]>(
+        '/dashboard/activity-logs',
+        { limit: 15 },
+      );
       const logList = Array.isArray(logsRes)
         ? logsRes
         : ((logsRes as { logs?: ActivityLogItem[] }).logs ?? []);
       setLogs(logList);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erreur');
+    } catch {
+      setLogs([]);
     } finally {
       setLoading(false);
     }

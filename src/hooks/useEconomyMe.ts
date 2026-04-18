@@ -23,6 +23,8 @@ export interface EconomySubscription {
 
 export interface EconomyData {
   monthYear: string;
+  /** Établissement rattaché (profil utilisateur) */
+  hospitalId: string | null;
   accessLevel: 'GRATUIT' | 'PREMIUM';
   gate: EconomyGate;
   quota: EconomyQuota | null;

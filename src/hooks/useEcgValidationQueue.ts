@@ -7,7 +7,11 @@ import { parseEcgListResponse } from '@/hooks/parseEcgListResponse';
  * File ECG pour la secrétaire : ECG en attente de validation (status pending)
  * et, optionnellement, tous les ECG du jour.
  */
-export function useEcgValidationQueue(status?: string, limit = 150) {
+export function useEcgValidationQueue(
+  status?: string,
+  limit = 150,
+  hospitalId?: string | null,
+) {
   const [records, setRecords] = useState<EcgRecordItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -19,6 +23,7 @@ export function useEcgValidationQueue(status?: string, limit = 150) {
     try {
       const params: Record<string, string | number | boolean> = { limit };
       if (status) params.status = status;
+      if (hospitalId != null && hospitalId !== '') params.hospital_id = hospitalId;
       const res = await api.get<unknown>('/ecg-records', params);
       const { records: list, total: tot } = parseEcgListResponse(res);
       setRecords(list);
@@ -28,7 +33,7 @@ export function useEcgValidationQueue(status?: string, limit = 150) {
     } finally {
       setLoading(false);
     }
-  }, [status, limit]);
+  }, [status, limit, hospitalId]);
 
   useEffect(() => {
     void fetchRecords();

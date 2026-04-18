@@ -32,17 +32,6 @@ function isPhysicalDevice(): boolean {
   return true;
 }
 
-// Comportement par défaut : afficher les notifs même si l'app est au premier plan
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
-
 /** Routes de destination par type de notification */
 function resolveRoute(data: Record<string, unknown>, role: UserRole): string | null {
   const type = typeof data?.type === 'string' ? data.type : '';
@@ -73,45 +62,53 @@ async function registerForPushNotificationsAsync(role: UserRole): Promise<string
     return null;
   }
 
-  // Créer les canaux Android par rôle
-  if (Platform.OS === 'android') {
-    const channelDefs: Record<UserRole, { id: string; name: string; importance: Notifications.AndroidImportance }> = {
-      medecin:     { id: 'medecin',    name: 'Rapports ECG', importance: Notifications.AndroidImportance.HIGH },
-      cardiologue: { id: 'cardiologue', name: 'File ECG', importance: Notifications.AndroidImportance.MAX },
-      secretaire:  { id: 'secretaire', name: 'Inscriptions', importance: Notifications.AndroidImportance.HIGH },
-      admin:       { id: 'admin',      name: 'Alertes admin', importance: Notifications.AndroidImportance.HIGH },
-    };
-    const ch = channelDefs[role];
-    if (ch) {
-      await Notifications.setNotificationChannelAsync(ch.id, {
-        name: ch.name,
-        importance: ch.importance,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#7c3aed',
-      });
+  try {
+    // Créer les canaux Android par rôle
+    if (Platform.OS === 'android') {
+      const channelDefs: Record<UserRole, { id: string; name: string; importance: Notifications.AndroidImportance }> = {
+        medecin:     { id: 'medecin',    name: 'Rapports ECG', importance: Notifications.AndroidImportance.HIGH },
+        cardiologue: { id: 'cardiologue', name: 'File ECG', importance: Notifications.AndroidImportance.MAX },
+        secretaire:  { id: 'secretaire', name: 'Inscriptions', importance: Notifications.AndroidImportance.HIGH },
+        admin:       { id: 'admin',      name: 'Alertes admin', importance: Notifications.AndroidImportance.HIGH },
+      };
+      const ch = channelDefs[role];
+      if (ch) {
+        await Notifications.setNotificationChannelAsync(ch.id, {
+          name: ch.name,
+          importance: ch.importance,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#7c3aed',
+        });
+      }
     }
-  }
 
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
 
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
 
-  if (finalStatus !== 'granted') {
-    console.warn('[Push] Permission refusée');
+    if (finalStatus !== 'granted') {
+      console.warn('[Push] Permission refusée');
+      return null;
+    }
+
+    const projectId: string | undefined =
+      (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId ??
+      Constants.easConfig?.projectId;
+
+    // getExpoPushTokenAsync nécessite Firebase/FCM configuré (build de prod EAS uniquement)
+    // En dev client sans FCM, cette fonction lève une erreur — on la capture proprement.
+    const token = await Notifications.getExpoPushTokenAsync({ projectId });
+    return token.data;
+
+  } catch (err) {
+    // Firebase non initialisé (dev client sans FCM) ou autre erreur non bloquante
+    console.warn('[Push] Token non obtenu (build de dev sans FCM) :', err instanceof Error ? err.message : err);
     return null;
   }
-
-  const projectId: string | undefined =
-    (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId ??
-    Constants.easConfig?.projectId;
-
-  const token = await Notifications.getExpoPushTokenAsync({ projectId });
-
-  return token.data;
 }
 
 interface UsePushNotificationsOptions {
@@ -123,14 +120,33 @@ interface UsePushNotificationsOptions {
 export function usePushNotifications({ userId, role, enabled }: UsePushNotificationsOptions) {
   const tokenSentRef = useRef<string | null>(null);
   const responseListenerRef = useRef<Notifications.EventSubscription | null>(null);
+  const handlerReadyRef = useRef(false);
+
+  // Handler différé (pas au chargement du module) : évite des plantages natifs rares au tout
+  // premier chargement du bundle sur dev Android + tunnel.
+  useEffect(() => {
+    if (handlerReadyRef.current) return;
+    handlerReadyRef.current = true;
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  }, []);
 
   const sendTokenToServer = useCallback(async (token: string, currentUserId: string) => {
     if (tokenSentRef.current === token) return;
     try {
+      // Endpoint optionnel — si absent du backend (404), on ignore silencieusement
       await api.post('/notifications/register-push-token', { token, user_id: currentUserId });
       tokenSentRef.current = token;
-    } catch {
-      // Non bloquant — on réessaiera au prochain montage
+    } catch (err) {
+      // 404 = endpoint pas encore implémenté côté backend, ou erreur réseau — non bloquant
+      console.warn('[Push] Enregistrement token ignoré :', err instanceof Error ? err.message : err);
     }
   }, []);
 

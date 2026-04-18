@@ -10,6 +10,7 @@ import { router } from 'expo-router';
 import { useAuth } from '@/providers/AuthProvider';
 import { api } from '@/lib/apiClient';
 import { useTheme, type ThemePreference } from '@/providers/ThemeProvider';
+import { useTranslation, type Locale } from '@/i18n';
 
 const ROLE_LABEL: Record<string, string> = {
   medecin: 'Médecin prescripteur',
@@ -74,9 +75,15 @@ const THEME_OPTIONS: { key: ThemePreference; label: string }[] = [
   { key: 'system', label: 'Système' },
 ];
 
+const LOCALE_OPTIONS: { key: Locale; label: string; flag: string }[] = [
+  { key: 'fr', label: 'Français', flag: '🇫🇷' },
+  { key: 'en', label: 'English', flag: '🇬🇧' },
+];
+
 export default function ProfileScreenShared() {
   const { user, logout, isBiometricAvailable, isBiometricEnrolled } = useAuth();
   const { colors: joyful, preference, setPreference } = useTheme();
+  const { locale, setLocale } = useTranslation();
   const insets = useSafeAreaInsets();
   const [loggingOut, setLoggingOut] = useState(false);
   const [kpiLoading] = useState(false);
@@ -193,6 +200,36 @@ export default function ProfileScreenShared() {
                   }}
                   activeOpacity={0.85}
                 >
+                  <Text className={`text-xs font-semibold ${active ? 'text-white' : 'text-gray-700 dark:text-zinc-300'}`}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text className="text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wider px-4 pt-3 pb-2">
+            Langue
+          </Text>
+          <View className="flex-row px-3 pb-3 gap-2">
+            {LOCALE_OPTIONS.map(opt => {
+              const active = locale === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  className={`flex-1 py-2.5 rounded-xl border items-center flex-row justify-center gap-1.5 ${
+                    active ? 'bg-indigo-600 border-indigo-600' : 'bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700'
+                  }`}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setLocale(opt.key);
+                  }}
+                  activeOpacity={0.85}
+                  accessibilityLabel={`Langue ${opt.label}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text className="text-sm">{opt.flag}</Text>
                   <Text className={`text-xs font-semibold ${active ? 'text-white' : 'text-gray-700 dark:text-zinc-300'}`}>
                     {opt.label}
                   </Text>

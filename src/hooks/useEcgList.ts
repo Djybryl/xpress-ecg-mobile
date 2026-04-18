@@ -30,11 +30,15 @@ export interface UseEcgListParams {
 export function useEcgList(params: UseEcgListParams = {}) {
   const [records, setRecords] = useState<EcgRecordItem[]>([]);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
+  // Démarre en loading=true si la requête sera lancée, évite le flash "Aucune demande"
+  const [loading, setLoading] = useState(params.enabled !== false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchRecords = useCallback(async () => {
-    if (params.enabled === false) return;
+    if (params.enabled === false) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -44,7 +48,7 @@ export function useEcgList(params: UseEcgListParams = {}) {
       if (params.referring_doctor_id) qp.referring_doctor_id = params.referring_doctor_id;
       if (params.status) qp.status = params.status;
 
-      const res = await api.get<EcgRecordItem[] | { records?: EcgRecordItem[]; total?: number }>(
+      const res = await api.get<{ records?: EcgRecordItem[]; total?: number } | EcgRecordItem[]>(
         '/ecg-records', qp,
       );
       const list = Array.isArray(res) ? res : ((res as { records?: EcgRecordItem[] }).records ?? []);
@@ -52,7 +56,7 @@ export function useEcgList(params: UseEcgListParams = {}) {
       setRecords(list);
       setTotal(tot);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erreur');
+      setError(e instanceof Error ? e.message : 'Erreur lors du chargement');
     } finally {
       setLoading(false);
     }

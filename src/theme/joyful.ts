@@ -147,8 +147,50 @@ const baseDark = {
   tabProfile: '#fbbf24',
 } as const;
 
-export const joyfulLight = { ...baseLight, neutral: neutralLight };
-export const joyfulDark = { ...baseDark, neutral: neutralDark };
+const semanticLight = {
+  error: '#ef4444',
+  errorMuted: '#fef2f2',
+  errorBorder: '#fecaca',
+  success: '#16a34a',
+  successMuted: '#f0fdf4',
+  successBorder: '#bbf7d0',
+  warning: '#d97706',
+  warningMuted: '#fffbeb',
+  warningBorder: '#fde68a',
+  info: '#0284c7',
+  infoMuted: '#f0f9ff',
+  infoBorder: '#bae6fd',
+  ecgGrid: '#fce4ec',
+  ecgTrace: '#1a1a1a',
+  ecgLabel: '#37474f',
+  cardBg: '#ffffff',
+  cardBorder: '#f3f4f6',
+} as const;
+
+const semanticDark = {
+  error: '#f87171',
+  errorMuted: '#450a0a',
+  errorBorder: '#7f1d1d',
+  success: '#4ade80',
+  successMuted: '#052e16',
+  successBorder: '#166534',
+  warning: '#fbbf24',
+  warningMuted: '#451a03',
+  warningBorder: '#78350f',
+  info: '#38bdf8',
+  infoMuted: '#0c4a6e',
+  infoBorder: '#0369a1',
+  ecgGrid: '#2a1a2a',
+  ecgTrace: '#e0e0e0',
+  ecgLabel: '#b0bec5',
+  cardBg: '#1c1c22',
+  cardBorder: '#3f3f46',
+} as const;
+
+export type SemanticColors = typeof semanticLight;
+
+export const joyfulLight = { ...baseLight, neutral: neutralLight, semantic: semanticLight };
+export const joyfulDark = { ...baseDark, neutral: neutralDark, semantic: semanticDark };
 
 /** @deprecated Utiliser `useTheme().colors` ou `joyfulLight` */
 export const joyful = joyfulLight;

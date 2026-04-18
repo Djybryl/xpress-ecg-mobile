@@ -4,17 +4,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useRoleGuard } from '@/hooks/useRoleGuard';
+import { useAuth } from '@/providers/AuthProvider';
+import { useCardiologistDashboard } from '@/hooks/useCardiologistDashboard';
 
 function TabIcon({
   name,
   label,
   focused,
   color,
+  badge,
 }: {
   name: keyof typeof Ionicons.glyphMap;
   label: string;
   focused: boolean;
   color: string;
+  badge?: number;
 }) {
   const { colors: joyful } = useTheme();
   const iconColor = focused ? joyful.tabFocused : color;
@@ -42,6 +46,26 @@ function TabIcon({
         }}
       >
         <Ionicons name={name} size={20} color={iconColor} />
+        {badge != null && badge > 0 && (
+          <View
+            style={{
+              position: 'absolute',
+              top: -4,
+              right: -8,
+              backgroundColor: '#ef4444',
+              borderRadius: 8,
+              minWidth: 16,
+              height: 16,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 3,
+            }}
+          >
+            <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>
+              {badge > 99 ? '99+' : badge}
+            </Text>
+          </View>
+        )}
       </View>
       <Text
         numberOfLines={1}
@@ -65,8 +89,13 @@ function TabIcon({
 
 export default function CardiologueTabLayout() {
   const ok = useRoleGuard('cardiologue');
+  const { user } = useAuth();
   const { colors: joyful } = useTheme();
   const insets = useSafeAreaInsets();
+  const { stats } = useCardiologistDashboard(!!user?.id);
+
+  const queueBadge = (stats?.assigned_count ?? 0) + (stats?.analyzing_count ?? 0);
+  const secondOpinionBadge = stats?.pending_second_opinions ?? 0;
 
   if (!ok) return null;
 
@@ -78,6 +107,7 @@ export default function CardiologueTabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        animation: 'shift',
         tabBarStyle: {
           backgroundColor: joyful.tabBarBg,
           borderTopColor: joyful.tabBarBorder,
@@ -115,7 +145,7 @@ export default function CardiologueTabLayout() {
         options={{
           title: 'File ECG',
           tabBarIcon: ({ focused }) => (
-            <TabIcon name="layers" label="File ECG" focused={focused} color={joyful.tabRequests} />
+            <TabIcon name="layers" label="File ECG" focused={focused} color={joyful.tabRequests} badge={queueBadge} />
           ),
         }}
       />
@@ -129,6 +159,24 @@ export default function CardiologueTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="history"
+        options={{
+          title: 'Historique',
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name="time" label="Historique" focused={focused} color={joyful.tabReports} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="second-opinions"
+        options={{
+          title: 'Second avis',
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name="people" label="2e avis" focused={focused} color={joyful.tabRequests} badge={secondOpinionBadge} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profil',
@@ -138,6 +186,9 @@ export default function CardiologueTabLayout() {
         }}
       />
       <Tabs.Screen name="interpret/[id]" options={{ href: null, title: 'Interprétation' }} />
+      <Tabs.Screen name="second-opinion/[id]" options={{ href: null, title: 'Second avis' }} />
+      <Tabs.Screen name="request-second-opinion" options={{ href: null, title: 'Demander un second avis' }} />
+      <Tabs.Screen name="notifications" options={{ href: null, title: 'Notifications' }} />
     </Tabs>
   );
 }

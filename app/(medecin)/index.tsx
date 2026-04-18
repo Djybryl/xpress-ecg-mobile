@@ -76,7 +76,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const {
-    records: ecgRecords, loading: ecgLoading, refetch: refetchEcg,
+    records: ecgRecords, loading: ecgLoading, error: ecgError, refetch: refetchEcg,
   } = useEcgList({
     referring_doctor_id: user?.id,
     limit: 50,
@@ -161,6 +161,17 @@ export default function HomeScreen() {
         }
         contentContainerStyle={{ paddingBottom: 30 }}
       >
+        {/* Erreur chargement */}
+        {ecgError && !ecgLoading && (
+          <View className="mx-4 mt-3 p-3 rounded-xl bg-red-50 border border-red-200 dark:bg-red-950/40 dark:border-red-900 flex-row items-center gap-2">
+            <Text className="text-base">⚠️</Text>
+            <Text className="flex-1 text-red-700 dark:text-red-400 text-xs">{ecgError}</Text>
+            <TouchableOpacity onPress={() => refetchEcg()}>
+              <Text className="text-red-600 dark:text-red-400 text-xs font-semibold underline">Réessayer</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Stats */}
         <View className="bg-white dark:bg-zinc-900 mx-4 rounded-2xl p-4 shadow-sm shadow-gray-200 dark:shadow-none border border-gray-100 dark:border-zinc-800">
           {isLoading

@@ -3,7 +3,7 @@ import React, {
 } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { api, tokenStorage, onSessionExpired, ApiError } from '@/lib/apiClient';
+import { api, tokenStorage, onSessionExpired, AUTH_REQUEST_TIMEOUT_MS } from '@/lib/apiClient';
 import type { UserSession, LoginResponse } from '@/types/user';
 import { normalizeApiRole } from '@/types/user';
 
@@ -60,12 +60,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         setUser(stored);
-        api.get<{ user: LoginResponse['user'] }>('/auth/me')
+        api.get<{ user: LoginResponse['user'] }>('/auth/me', undefined, { timeoutMs: AUTH_REQUEST_TIMEOUT_MS })
           .then(me => {
             setUser(prev => prev ? {
               ...prev,
               name: me.user.fullName,
               role: normalizeApiRole(me.user.role),
+              hospitalId: me.user.hospitalId ?? prev.hospitalId,
               prescriberGateStatus: me.user.prescriberGateStatus ?? prev.prescriberGateStatus,
             } : prev);
           })
@@ -92,7 +93,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const data = await api.post<LoginResponse>('/auth/login', { email, password });
+    const data = await api.post<LoginResponse>(
+      '/auth/login',
+      { email, password },
+      { timeoutMs: AUTH_REQUEST_TIMEOUT_MS },
+    );
     await tokenStorage.save(data.tokens.accessToken, data.tokens.refreshToken);
     const session = toUserSession(data);
     await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(session));
@@ -111,7 +116,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const token = await tokenStorage.getAccess();
     if (!token) return null;
     try {
-      const me = await api.get<{ user: LoginResponse['user'] }>('/auth/me');
+      const me = await api.get<{ user: LoginResponse['user'] }>(
+        '/auth/me',
+        undefined,
+        { timeoutMs: AUTH_REQUEST_TIMEOUT_MS },
+      );
       const session: UserSession = {
         id: me.user.id, email: me.user.email, name: me.user.fullName,
         role: normalizeApiRole(me.user.role), hospitalId: me.user.hospitalId,

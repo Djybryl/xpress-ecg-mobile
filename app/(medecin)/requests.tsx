@@ -89,7 +89,7 @@ export default function RequestsScreen() {
   const [statusFilter, setStatusFilter] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
-  const { records, loading, refetch } = useEcgList({
+  const { records, loading, error, refetch } = useEcgList({
     referring_doctor_id: user?.id,
     limit: 200,
     enabled: !!user?.id,
@@ -171,6 +171,23 @@ export default function RequestsScreen() {
         </Text>
       </View>
 
+      {/* Erreur API */}
+      {error && !loading && (
+        <View className="mx-4 my-2 p-3 rounded-xl bg-red-50 border border-red-200 dark:bg-red-950/40 dark:border-red-900 flex-row items-start gap-2">
+          <Text className="text-red-500 text-base">⚠️</Text>
+          <View className="flex-1">
+            <Text className="text-red-700 dark:text-red-400 text-xs font-semibold">Impossible de charger les demandes</Text>
+            <Text className="text-red-600 dark:text-red-500 text-xs mt-0.5">{error}</Text>
+            <TouchableOpacity
+              className="mt-2 bg-red-100 dark:bg-red-900/40 rounded-lg px-3 py-1.5 self-start"
+              onPress={onRefresh}
+            >
+              <Text className="text-red-700 dark:text-red-300 text-xs font-semibold">Réessayer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* Liste */}
       {loading && !refreshing
         ? (
@@ -187,13 +204,18 @@ export default function RequestsScreen() {
             }
             contentContainerStyle={{ paddingTop: 4, paddingBottom: 30 }}
           >
-            {filtered.length === 0
+            {!error && filtered.length === 0
               ? (
-                <View className="items-center mt-16">
+                <View className="items-center mt-16 px-6">
                   <Text className="text-4xl mb-3">📋</Text>
                   <Text className="text-gray-600 dark:text-zinc-400 font-medium text-center">
                     {search ? 'Aucune demande ne correspond à votre recherche.' : 'Aucune demande pour le moment.'}
                   </Text>
+                  {!search && (
+                    <Text className="text-xs text-gray-400 dark:text-zinc-500 text-center mt-2">
+                      ID compte : {user?.id ?? 'non défini'}
+                    </Text>
+                  )}
                 </View>
               )
               : filtered.map(item => <EcgCard key={item.id} item={item} />)
