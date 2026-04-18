@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ECGTraceView — composant principal d'affichage du tracé ECG mobile.
  * Gère automatiquement le mode image (JPEG/PNG) ou signal (DICOM/SCP/WFDB parsé).
  * Bandeau de mesures, plein écran immersif (toolbar auto-masquée), calibre sur DII.
@@ -36,12 +36,6 @@ import { extractEcgMeasurements, hasAnyMeasurement } from '@/lib/ecgMeasurementD
 /** Durée avant masquage automatique de la toolbar en plein écran (ms). */
 const TOOLBAR_AUTO_HIDE_MS = 3500;
 
-/**
- * Nombre de rangées dans le layout ECG avec bande DII longue.
- * 4×3 : 3 rangées de leads + 1 bande DII = 4 rangées.
- * Utilisé pour calculer pxPerMm en plein écran.
- */
-const FS_TOTAL_ROWS = 4;
 
 interface ECGTraceViewProps {
   ecgId: string;
@@ -181,16 +175,16 @@ export function ECGTraceView({
 
   /**
    * pxPerMm calculé pour que le tracé remplisse exactement la hauteur disponible.
-   * On suppose 4 rangées (3 leads + DII) pour le layout 4×3 standard.
-   * Cela évite toute zone vide et tout zoom CSS de compensation.
-   *
-   * Formule : pxPerMm = fsTraceH / (FS_TOTAL_ROWS × ROW_HEIGHT_MM)
-   * Bornes : min 2 (lisibilité), max 10 (résolution suffisante)
+   * ROW_HEIGHT_MM = 30 (confirmé dans ecg-utils.ts)
+   * 5 rangées effectives : 4 lignes leads (4×3) + 1 bande DII longue
+   * MARGIN_PX = 24 : compense marginTop + paddingTop de la bande DII + marge basse
    */
   const fsPxPerMm = useMemo(() => {
     if (!fullscreen || fsTraceH <= 0) return undefined;
-    const totalHeightMM = FS_TOTAL_ROWS * ROW_HEIGHT_MM;
-    return Math.max(2, Math.min(10, fsTraceH / totalHeightMM));
+    const EFFECTIVE_ROWS = 5;
+    const MARGIN_PX = 24;
+    const usableH = Math.max(1, fsTraceH - MARGIN_PX);
+    return Math.max(2, Math.min(10, usableH / (EFFECTIVE_ROWS * ROW_HEIGHT_MM)));
   }, [fullscreen, fsTraceH]);
 
   // Réinitialiser le layout 4×3 à l'ouverture du plein écran
@@ -326,7 +320,12 @@ export function ECGTraceView({
         <StatusBar hidden />
         <View style={styles.fsRoot}>
 
-          {/* Zone tracé — prend tout l'espace */}
+          {/* Bandeau mesures — en flux normal, au-dessus du tracé, jamais flottant */}
+          {showMeasurementsStrip && (
+            <ECGMeasurementsStrip measurements={measurements} />
+          )}
+
+          {/* Zone tracé — prend tout l'espace restant */}
           <View
             style={styles.fsViewerWrap}
             onLayout={e => {
@@ -357,13 +356,6 @@ export function ECGTraceView({
             ) : null}
           </View>
 
-          {/* Bandeau mesures — toujours visible, flottant en haut */}
-          {showMeasurementsStrip && (
-            <View style={styles.fsMeasurements} pointerEvents="none">
-              <ECGMeasurementsStrip measurements={measurements} />
-            </View>
-          )}
-
           {/* Bouton fermer — toujours visible en haut à droite */}
           <View
             style={[
@@ -379,7 +371,7 @@ export function ECGTraceView({
               hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
               activeOpacity={0.7}
             >
-              <Ionicons name="close" size={20} color="#fff" />
+              <Ionicons name="close" size={20} color="#1a1a1a" />
             </TouchableOpacity>
           </View>
 
@@ -478,17 +470,10 @@ const styles = StyleSheet.create({
   // ── Plein écran ──────────────────────────────────────────────────────────
   fsRoot: {
     flex: 1,
-    backgroundColor: '#0d0d0d',
+    backgroundColor: '#FFF8F6',
   },
   fsViewerWrap: {
     flex: 1,
-  },
-  fsMeasurements: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 5,
   },
   fsCloseBtn: {
     position: 'absolute',
@@ -499,7 +484,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -511,14 +496,14 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   fsToolbarInner: {
-    backgroundColor: 'rgba(10,10,10,0.85)',
+    backgroundColor: 'rgba(250,245,240,0.95)',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.1)',
+    borderTopColor: 'rgba(0,0,0,0.15)',
     paddingTop: 2,
   },
   fsHintWrap: {
     position: 'absolute',
-    bottom: 52,
+    bottom: 72,
     alignSelf: 'center',
     zIndex: 15,
     backgroundColor: 'rgba(0,0,0,0.45)',

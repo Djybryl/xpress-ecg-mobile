@@ -305,16 +305,10 @@ export function ECGSignalViewer({
       if (onSingleTap) onSingleTap();
     });
 
-  /**
-   * Composition des gestes :
-   * - Simultaneous(pinch, pan) : zoom et pan en même temps
-   * - Le double-tap et single-tap sont simultanés avec le reste mais le double-tap
-   *   est prioritaire via requireExternalGestureToFail sur le single-tap
-   */
-  const gesture = Gesture.Race(
+  const tapGesture = Gesture.Exclusive(doubleTap, singleTap);
+  const gesture = Gesture.Simultaneous(
     Gesture.Simultaneous(pinch, pan),
-    doubleTap,
-    singleTap,
+    tapGesture,
   );
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -381,7 +375,7 @@ export function ECGSignalViewer({
     ));
   };
 
-  const bgColor = isFullscreen ? '#0d0d0d' : c.bg;
+  const bgColor = c.bg;
 
   return (
     <GestureDetector gesture={gesture}>
@@ -484,9 +478,9 @@ const styles = StyleSheet.create({
   },
   leadLabel: {
     width: LABEL_W,
-    fontSize: 9,
-    fontWeight: '600',
-    paddingLeft: 2,
+    fontSize: 10,
+    fontWeight: '700',
+    paddingLeft: 3,
   },
   longStripRow: {
     flexDirection: 'row',
@@ -508,13 +502,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 4,
     right: 6,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.10)',
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
   scaleTagText: {
-    color: '#fff',
+    color: '#333',
     fontSize: 9,
     fontWeight: '600',
   },
