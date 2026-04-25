@@ -1,12 +1,14 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  RefreshControl, TextInput, ActivityIndicator, Alert,
+  RefreshControl, TextInput, ActivityIndicator, Alert, Modal, Pressable,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useEcgValidationQueue } from '@/hooks/useEcgValidationQueue';
+import { useActiveCardiologues } from '@/hooks/useActiveCardiologues';
 import { api } from '@/lib/apiClient';
 import type { EcgRecordItem } from '@/hooks/useEcgList';
 import { useAuth } from '@/providers/AuthProvider';
@@ -55,7 +57,11 @@ export default function SecretaireEcgQueue() {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [validating, setValidating] = useState<string | null>(null);
+  const [assignModal, setAssignModal] = useState(false);
+  const [assigningRecord, setAssigningRecord] = useState<EcgRecordItem | null>(null);
+  const [assigning, setAssigning] = useState(false);
+
+  const { users: cardiologues, loading: cardioLoading } = useActiveCardiologues();
 
   const statusParam = filter === 'all' ? undefined : filter;
   const { records, total, loading, refetch } = useEcgValidationQueue(
@@ -80,31 +86,21 @@ export default function SecretaireEcgQueue() {
     setRefreshing(false);
   }, [refetch]);
 
-  const handleValidate = useCallback((record: EcgRecordItem) => {
-    if (record.status !== 'pending') return;
-    Alert.alert(
-      'Valider cet ECG',
-      `Confirmer la validation de l'ECG de ${record.patient_name ?? 'ce patient'} ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Valider',
-          style: 'default',
-          onPress: async () => {
-            setValidating(record.id);
-            try {
-              await api.post(`/ecg-records/${record.id}/validate`, {});
-              await refetch();
-            } catch (e) {
-              Alert.alert('Erreur', e instanceof Error ? e.message : 'Impossible de valider');
-            } finally {
-              setValidating(null);
-            }
-          },
-        },
-      ],
-    );
-  }, [refetch]);
+  const handleAssign = useCallback(async (cardiologistId: string) => {
+    if (!assigningRecord) return;
+    setAssigning(true);
+    try {
+      await api.post(`/ecg-records/${assigningRecord.id}/assign`, { cardiologistId });
+      setAssignModal(false);
+      setAssigningRecord(null);
+      await refetch();
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      Alert.alert('Erreur', e instanceof Error ? e.message : 'Impossible d\'assigner');
+    } finally {
+      setAssigning(false);
+    }
+  }, [assigningRecord, refetch]);
 
   return (
     <View className="flex-1 bg-gray-50 dark:bg-zinc-950" style={{ paddingTop: insets.top }}>
@@ -203,20 +199,17 @@ export default function SecretaireEcgQueue() {
                 </Text>
               </View>
 
-              {record.status === 'pending' && (
+              {(record.status === 'pending' || record.status === 'validated') && record.assigned_to == null && (
                 <TouchableOpacity
-                  onPress={() => handleValidate(record)}
-                  disabled={validating === record.id}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#d1fae5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}
+                  onPress={() => { setAssigningRecord(record); setAssignModal(true); }}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', gap: 4,
+                    borderWidth: 1, borderColor: '#7c3aed',
+                    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
+                  }}
                 >
-                  {validating === record.id ? (
-                    <ActivityIndicator size="small" color="#065f46" />
-                  ) : (
-                    <>
-                      <Ionicons name="checkmark-circle" size={14} color="#065f46" />
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#065f46' }}>Valider</Text>
-                    </>
-                  )}
+                  <Ionicons name="person-add-outline" size={13} color="#7c3aed" />
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#7c3aed' }}>Assigner</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -229,6 +222,85 @@ export default function SecretaireEcgQueue() {
           </View>
         ))}
       </ScrollView>
+
+      {/* Modal d'assignation */}
+      <Modal
+        visible={assignModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => { setAssignModal(false); setAssigningRecord(null); }}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }}
+          onPress={() => { setAssignModal(false); setAssigningRecord(null); }}
+        >
+          <Pressable onPress={() => { /* intercepte le tap pour ne pas fermer */ }}>
+            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: insets.bottom + 16 }}>
+              {/* En-tête */}
+              <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+                <Text style={{ fontSize: 17, fontWeight: '700', color: '#111827' }}>Assigner à un cardiologue</Text>
+                <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>L'ECG sera directement visible dans sa file</Text>
+              </View>
+
+              {/* Liste des cardiologues */}
+              <ScrollView style={{ maxHeight: 340 }} contentContainerStyle={{ paddingVertical: 8 }}>
+                {cardioLoading && (
+                  <ActivityIndicator color="#7c3aed" style={{ marginVertical: 24 }} />
+                )}
+                {!cardioLoading && cardiologues.length === 0 && (
+                  <Text style={{ textAlign: 'center', color: '#9ca3af', fontSize: 13, paddingVertical: 24 }}>
+                    Aucun cardiologue disponible
+                  </Text>
+                )}
+                {cardiologues.map(cardio => {
+                  const initials = (cardio.full_name ?? '??').trim().slice(0, 2).toUpperCase();
+                  return (
+                    <TouchableOpacity
+                      key={cardio.id}
+                      disabled={assigning}
+                      onPress={() => void handleAssign(cardio.id)}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center', gap: 12,
+                        paddingHorizontal: 20, paddingVertical: 13,
+                        opacity: assigning ? 0.5 : 1,
+                      }}
+                    >
+                      {/* Cercle initiales */}
+                      <View style={{
+                        width: 40, height: 40, borderRadius: 20,
+                        backgroundColor: '#ede9fe', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#6d28d9' }}>{initials}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#111827' }}>
+                          Dr {cardio.full_name}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#10b981', marginTop: 1 }}>Disponible</Text>
+                      </View>
+                      {assigning && (
+                        <ActivityIndicator size="small" color="#7c3aed" />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Bouton Annuler */}
+              <TouchableOpacity
+                onPress={() => { setAssignModal(false); setAssigningRecord(null); }}
+                style={{
+                  marginHorizontal: 20, marginTop: 8,
+                  paddingVertical: 13, borderRadius: 14,
+                  backgroundColor: '#f3f4f6', alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Annuler</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
