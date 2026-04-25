@@ -2,11 +2,13 @@
  * ECGTraceView — composant principal d'affichage du tracé ECG mobile.
  * Gère automatiquement le mode image (JPEG/PNG) ou signal (DICOM/SCP/WFDB parsé).
  * Bandeau de mesures, plein écran immersif (toolbar auto-masquée), calibre sur DII.
+ * NOTE BUILD: changement natif expo-screen-orientation -> nécessite un nouveau build EAS.
  *
  * Plein écran : calcule pxPerMm pour que le SVG remplisse exactement la hauteur disponible
  * sans zoom CSS (pas de zone vide). Approche professionnelle standard.
  */
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback, useReducer } from 'react';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import {
   View,
   Text,
@@ -18,6 +20,7 @@ import {
   Platform,
 } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,6 +39,66 @@ import { extractEcgMeasurements, hasAnyMeasurement } from '@/lib/ecgMeasurementD
 /** Durée avant masquage automatique de la toolbar en plein écran (ms). */
 const TOOLBAR_AUTO_HIDE_MS = 3500;
 
+type ViewerState = {
+  speed: 25 | 50;
+  amplitude: 5 | 10 | 20;
+  gridVisible: boolean;
+  displayMode: DisplayMode;
+  viewMode: 'signal' | 'image';
+  caliper: boolean;
+  fullscreen: boolean;
+  toolbarVisible: boolean;
+};
+
+type ViewerAction =
+  | { type: 'SET_SPEED'; value: 25 | 50 }
+  | { type: 'SET_AMPLITUDE'; value: 5 | 10 | 20 }
+  | { type: 'TOGGLE_GRID' }
+  | { type: 'SET_DISPLAY_MODE'; value: DisplayMode }
+  | { type: 'TOGGLE_VIEW_MODE' }
+  | { type: 'TOGGLE_CALIPER' }
+  | { type: 'OPEN_FULLSCREEN' }
+  | { type: 'CLOSE_FULLSCREEN' }
+  | { type: 'SHOW_TOOLBAR' }
+  | { type: 'HIDE_TOOLBAR' };
+
+const initialViewerState: ViewerState = {
+  speed: 25,
+  amplitude: 10,
+  gridVisible: true,
+  displayMode: '4x3',
+  viewMode: 'signal',
+  caliper: false,
+  fullscreen: false,
+  toolbarVisible: true,
+};
+
+function viewerReducer(state: ViewerState, action: ViewerAction): ViewerState {
+  switch (action.type) {
+    case 'SET_SPEED':
+      return { ...state, speed: action.value };
+    case 'SET_AMPLITUDE':
+      return { ...state, amplitude: action.value };
+    case 'TOGGLE_GRID':
+      return { ...state, gridVisible: !state.gridVisible };
+    case 'SET_DISPLAY_MODE':
+      return { ...state, displayMode: action.value };
+    case 'TOGGLE_VIEW_MODE':
+      return { ...state, viewMode: state.viewMode === 'signal' ? 'image' : 'signal' };
+    case 'TOGGLE_CALIPER':
+      return { ...state, caliper: !state.caliper };
+    case 'OPEN_FULLSCREEN':
+      return { ...state, fullscreen: true, toolbarVisible: true, displayMode: '4x3' };
+    case 'CLOSE_FULLSCREEN':
+      return { ...state, fullscreen: false };
+    case 'SHOW_TOOLBAR':
+      return { ...state, toolbarVisible: true };
+    case 'HIDE_TOOLBAR':
+      return { ...state, toolbarVisible: false };
+    default:
+      return state;
+  }
+}
 
 interface ECGTraceViewProps {
   ecgId: string;
@@ -61,17 +124,11 @@ export function ECGTraceView({
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
-  const [speed, setSpeed] = useState<25 | 50>(25);
-  const [amplitude, setAmplitude] = useState<5 | 10 | 20>(10);
-  const [gridVisible, setGridVisible] = useState(true);
-  const [displayMode, setDisplayMode] = useState<DisplayMode>('4x3');
-  const [viewMode, setViewMode] = useState<'signal' | 'image'>('signal');
-  const [caliper, setCaliper] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
+  const [state, dispatch] = useReducer(viewerReducer, initialViewerState);
 
   const hasSignals = !!signals?.length;
   const hasImage = !!imageUrl;
-  const showSignal = hasSignals && viewMode === 'signal';
+  const showSignal = hasSignals && state.viewMode === 'signal';
 
   const firstSignal = signals?.[0];
   const meta = firstSignal?.metadata as Record<string, unknown> | undefined;
@@ -80,12 +137,15 @@ export function ECGTraceView({
     String(firstSignal?.format ?? '').startsWith('digitized_image')
   );
 
-  const filterOpts = useMemo<EcgFilterOptions>(() => ({
-    lowPass40: true,
-    highPass005: true,
-    notch50: false,
-    smoothLevel: isDigitizedImage ? 2 : 1,
-  }), [isDigitizedImage]);
+  const filterOpts = useMemo<EcgFilterOptions>(
+    () => ({
+      lowPass40: true,
+      highPass005: true,
+      notch50: false,
+      smoothLevel: isDigitizedImage ? 2 : 1,
+    }),
+    [isDigitizedImage],
+  );
 
   const measurements = useMemo(
     () => extractEcgMeasurements(meta, recordHeartRate),
@@ -103,7 +163,6 @@ export function ECGTraceView({
 
   // ── Toolbar plein écran (auto-masquage) ────────────────────────────────
 
-  const [toolbarVisible, setToolbarVisible] = useState(true);
   const toolbarTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toolbarOpacity = useSharedValue(1);
   const toolbarAnimStyle = useAnimatedStyle(() => ({
@@ -114,41 +173,43 @@ export function ECGTraceView({
     if (toolbarTimer.current) clearTimeout(toolbarTimer.current);
     toolbarTimer.current = setTimeout(() => {
       toolbarOpacity.value = withTiming(0, { duration: 300 });
-      setToolbarVisible(false);
+      dispatch({ type: 'HIDE_TOOLBAR' });
     }, TOOLBAR_AUTO_HIDE_MS);
   }, [toolbarOpacity]);
 
   const showToolbar = useCallback(() => {
     toolbarOpacity.value = withTiming(1, { duration: 180 });
-    setToolbarVisible(true);
+    dispatch({ type: 'SHOW_TOOLBAR' });
     scheduleHideToolbar();
   }, [toolbarOpacity, scheduleHideToolbar]);
 
   const toggleToolbar = useCallback(() => {
-    if (toolbarVisible) {
+    if (state.toolbarVisible) {
       toolbarOpacity.value = withTiming(0, { duration: 180 });
-      setToolbarVisible(false);
+      dispatch({ type: 'HIDE_TOOLBAR' });
       if (toolbarTimer.current) clearTimeout(toolbarTimer.current);
     } else {
       showToolbar();
     }
-  }, [toolbarVisible, toolbarOpacity, showToolbar]);
+  }, [state.toolbarVisible, toolbarOpacity, showToolbar]);
 
-  const openFullscreen = useCallback(() => {
-    setFullscreen(true);
-    setToolbarVisible(true);
+  const openFullscreen = useCallback(async () => {
+    await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+    dispatch({ type: 'OPEN_FULLSCREEN' });
     toolbarOpacity.value = 1;
     scheduleHideToolbar();
   }, [toolbarOpacity, scheduleHideToolbar]);
 
-  const closeFullscreen = useCallback(() => {
-    setFullscreen(false);
+  const closeFullscreen = useCallback(async () => {
+    await ScreenOrientation.unlockAsync();
+    dispatch({ type: 'CLOSE_FULLSCREEN' });
     if (toolbarTimer.current) clearTimeout(toolbarTimer.current);
   }, []);
 
   useEffect(() => {
     return () => {
       if (toolbarTimer.current) clearTimeout(toolbarTimer.current);
+      void ScreenOrientation.unlockAsync();
     };
   }, []);
 
@@ -156,9 +217,20 @@ export function ECGTraceView({
 
   /** Hauteur réelle mesurée de la zone viewer dans la Modal (onLayout). */
   const [fsLayoutHeight, setFsLayoutHeight] = useState<number | null>(null);
+  const prevWindowSize = useRef({ w: windowWidth, h: windowHeight });
   useEffect(() => {
-    if (!fullscreen) setFsLayoutHeight(null);
-  }, [fullscreen]);
+    const prev = prevWindowSize.current;
+    if (prev.w !== windowWidth || prev.h !== windowHeight) {
+      prevWindowSize.current = { w: windowWidth, h: windowHeight };
+      if (state.fullscreen) {
+        setFsLayoutHeight(null);
+      }
+    }
+  }, [windowWidth, windowHeight, state.fullscreen]);
+
+  useEffect(() => {
+    if (!state.fullscreen) setFsLayoutHeight(null);
+  }, [state.fullscreen]);
 
   /**
    * Hauteur disponible pour le tracé en plein écran.
@@ -180,21 +252,12 @@ export function ECGTraceView({
    * MARGIN_PX = 24 : compense marginTop + paddingTop de la bande DII + marge basse
    */
   const fsPxPerMm = useMemo(() => {
-    if (!fullscreen || fsTraceH <= 0) return undefined;
+    if (!state.fullscreen || fsTraceH <= 0) return undefined;
     const EFFECTIVE_ROWS = 5;
     const MARGIN_PX = 24;
     const usableH = Math.max(1, fsTraceH - MARGIN_PX);
     return Math.max(2, Math.min(10, usableH / (EFFECTIVE_ROWS * ROW_HEIGHT_MM)));
-  }, [fullscreen, fsTraceH]);
-
-  // Réinitialiser le layout 4×3 à l'ouverture du plein écran
-  const prevFullscreen = useRef(false);
-  useEffect(() => {
-    if (fullscreen && !prevFullscreen.current && hasSignals) {
-      setDisplayMode('4x3');
-    }
-    prevFullscreen.current = fullscreen;
-  }, [fullscreen, hasSignals]);
+  }, [state.fullscreen, fsTraceH]);
 
   // ── Rendu ──────────────────────────────────────────────────────────────
 
@@ -221,9 +284,7 @@ export function ECGTraceView({
       return (
         <View style={[styles.centered, { height: height / 2, backgroundColor: colors.screenBg }]}>
           <Ionicons name="document-outline" size={32} color={colors.semantic.warning} />
-          <Text style={[styles.warningText, { color: colors.tipText }]}>
-            {t.ecg.parsePending}
-          </Text>
+          <Text style={[styles.warningText, { color: colors.tipText }]}>{t.ecg.parsePending}</Text>
         </View>
       );
     }
@@ -237,19 +298,17 @@ export function ECGTraceView({
 
   const traceBlock = (
     <>
-      {showMeasurementsStrip && (
-        <ECGMeasurementsStrip measurements={measurements} />
-      )}
+      {showMeasurementsStrip && <ECGMeasurementsStrip measurements={measurements} />}
       {showSignal && firstSignal ? (
         <ECGSignalViewer
           signal={firstSignal}
-          displayMode={displayMode}
-          gridVisible={gridVisible}
-          amplitude={amplitude}
-          speed={speed}
+          displayMode={state.displayMode}
+          gridVisible={state.gridVisible}
+          amplitude={state.amplitude}
+          speed={state.speed}
           filterOpts={filterOpts}
           height={height}
-          caliperEnabled={caliper}
+          caliperEnabled={state.caliper}
         />
       ) : hasImage ? (
         <ECGImageViewer uri={imageUrl!} height={height} />
@@ -286,139 +345,149 @@ export function ECGTraceView({
 
       {!compact && (
         <ECGToolbar
-          speed={speed}
-          onSpeedChange={setSpeed}
-          amplitude={amplitude}
-          onAmplitudeChange={setAmplitude}
-          gridVisible={gridVisible}
-          onGridToggle={() => setGridVisible(v => !v)}
-          displayMode={displayMode}
-          onDisplayModeChange={setDisplayMode}
+          speed={state.speed}
+          onSpeedChange={v => dispatch({ type: 'SET_SPEED', value: v })}
+          amplitude={state.amplitude}
+          onAmplitudeChange={v => dispatch({ type: 'SET_AMPLITUDE', value: v })}
+          gridVisible={state.gridVisible}
+          onGridToggle={() => dispatch({ type: 'TOGGLE_GRID' })}
+          displayMode={state.displayMode}
+          onDisplayModeChange={m => dispatch({ type: 'SET_DISPLAY_MODE', value: m })}
           hasSignals={hasSignals}
           hasImage={hasImage}
-          viewMode={viewMode}
+          viewMode={state.viewMode}
           onViewModeToggle={
-            hasSignals && hasImage
-              ? () => setViewMode(v => (v === 'signal' ? 'image' : 'signal'))
-              : undefined
+            hasSignals && hasImage ? () => dispatch({ type: 'TOGGLE_VIEW_MODE' }) : undefined
           }
           onFullscreenPress={openFullscreen}
           fullscreenActive={false}
-          caliperActive={caliper}
-          onCaliperToggle={() => setCaliper(v => !v)}
+          caliperActive={state.caliper}
+          onCaliperToggle={() => dispatch({ type: 'TOGGLE_CALIPER' })}
         />
       )}
 
-      {/* ─── Modal plein écran ──────────────────────────────────────────── */}
-      <Modal
-        visible={fullscreen}
-        animationType="fade"
-        presentationStyle="fullScreen"
-        supportedOrientations={['portrait', 'landscape-left', 'landscape-right']}
-        onRequestClose={closeFullscreen}
-      >
-        <StatusBar hidden />
-        <View style={styles.fsRoot}>
+      {state.fullscreen && (
+        <Modal
+          visible={state.fullscreen}
+          animationType="fade"
+          presentationStyle="fullScreen"
+          supportedOrientations={['portrait', 'landscape-left', 'landscape-right']}
+          onRequestClose={closeFullscreen}
+        >
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <StatusBar hidden />
+            <View style={styles.fsRoot}>
+              {showMeasurementsStrip && <ECGMeasurementsStrip measurements={measurements} />}
 
-          {/* Bandeau mesures — en flux normal, au-dessus du tracé, jamais flottant */}
-          {showMeasurementsStrip && (
-            <ECGMeasurementsStrip measurements={measurements} />
-          )}
+              <View
+                style={styles.fsViewerWrap}
+                onLayout={e => {
+                  const h = e.nativeEvent.layout.height;
+                  if (h > 0) setFsLayoutHeight(h);
+                }}
+              >
+                {showSignal && firstSignal ? (
+                  <ECGSignalViewer
+                    signal={firstSignal}
+                    displayMode={state.displayMode}
+                    gridVisible={state.gridVisible}
+                    amplitude={state.amplitude}
+                    speed={state.speed}
+                    filterOpts={filterOpts}
+                    height={fsTraceH}
+                    caliperEnabled={state.caliper}
+                    pxPerMmOverride={fsPxPerMm}
+                    onSingleTap={toggleToolbar}
+                  />
+                ) : hasImage ? (
+                  <ECGImageViewer
+                    uri={imageUrl!}
+                    height={fsTraceH}
+                    fullscreen
+                    onSingleTap={toggleToolbar}
+                  />
+                ) : null}
+              </View>
 
-          {/* Zone tracé — prend tout l'espace restant */}
-          <View
-            style={styles.fsViewerWrap}
-            onLayout={e => {
-              const h = e.nativeEvent.layout.height;
-              if (h > 0) setFsLayoutHeight(h);
-            }}
-          >
-            {showSignal && firstSignal ? (
-              <ECGSignalViewer
-                signal={firstSignal}
-                displayMode={displayMode}
-                gridVisible={gridVisible}
-                amplitude={amplitude}
-                speed={speed}
-                filterOpts={filterOpts}
-                height={fsTraceH}
-                caliperEnabled={caliper}
-                pxPerMmOverride={fsPxPerMm}
-                onSingleTap={toggleToolbar}
-              />
-            ) : hasImage ? (
-              <ECGImageViewer
-                uri={imageUrl!}
-                height={fsTraceH}
-                fullscreen
-                onSingleTap={toggleToolbar}
-              />
-            ) : null}
-          </View>
+              <View
+                style={[
+                  styles.fsCloseBtn,
+                  { top: Platform.OS === 'ios' ? insets.top + 6 : 10 },
+                ]}
+              >
+                <TouchableOpacity
+                  onPress={closeFullscreen}
+                  style={styles.fsIconBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.ecg.a11yCloseFullscreen}
+                  hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close" size={20} color="#1a1a1a" />
+                </TouchableOpacity>
+              </View>
 
-          {/* Bouton fermer — toujours visible en haut à droite */}
-          <View
-            style={[
-              styles.fsCloseBtn,
-              { top: Platform.OS === 'ios' ? insets.top + 6 : 10 },
-            ]}
-          >
-            <TouchableOpacity
-              onPress={closeFullscreen}
-              style={styles.fsIconBtn}
-              accessibilityRole="button"
-              accessibilityLabel={t.ecg.a11yCloseFullscreen}
-              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="close" size={20} color="#1a1a1a" />
-            </TouchableOpacity>
-          </View>
+              <Animated.View
+                style={[styles.fsToolbarWrap, toolbarAnimStyle]}
+                pointerEvents={state.toolbarVisible ? 'box-none' : 'none'}
+              >
+                <View
+                  style={[
+                    styles.fsToolbarInner,
+                    { paddingBottom: Platform.OS === 'ios' ? insets.bottom : 4 },
+                  ]}
+                >
+                  <ECGToolbar
+                    speed={state.speed}
+                    onSpeedChange={v => {
+                      dispatch({ type: 'SET_SPEED', value: v });
+                      showToolbar();
+                    }}
+                    amplitude={state.amplitude}
+                    onAmplitudeChange={v => {
+                      dispatch({ type: 'SET_AMPLITUDE', value: v });
+                      showToolbar();
+                    }}
+                    gridVisible={state.gridVisible}
+                    onGridToggle={() => {
+                      dispatch({ type: 'TOGGLE_GRID' });
+                      showToolbar();
+                    }}
+                    displayMode={state.displayMode}
+                    onDisplayModeChange={m => {
+                      dispatch({ type: 'SET_DISPLAY_MODE', value: m });
+                      showToolbar();
+                    }}
+                    hasSignals={hasSignals}
+                    hasImage={hasImage}
+                    viewMode={state.viewMode}
+                    onViewModeToggle={
+                      hasSignals && hasImage
+                        ? () => {
+                            dispatch({ type: 'TOGGLE_VIEW_MODE' });
+                            showToolbar();
+                          }
+                        : undefined
+                    }
+                    fullscreenActive
+                    caliperActive={state.caliper}
+                    onCaliperToggle={() => {
+                      dispatch({ type: 'TOGGLE_CALIPER' });
+                      showToolbar();
+                    }}
+                  />
+                </View>
+              </Animated.View>
 
-          {/* Toolbar en bas — auto-masquage avec fondu */}
-          <Animated.View
-            style={[styles.fsToolbarWrap, toolbarAnimStyle]}
-            pointerEvents={toolbarVisible ? 'box-none' : 'none'}
-          >
-            <View
-              style={[
-                styles.fsToolbarInner,
-                { paddingBottom: Platform.OS === 'ios' ? insets.bottom : 4 },
-              ]}
-            >
-              <ECGToolbar
-                speed={speed}
-                onSpeedChange={(v) => { setSpeed(v); showToolbar(); }}
-                amplitude={amplitude}
-                onAmplitudeChange={(v) => { setAmplitude(v); showToolbar(); }}
-                gridVisible={gridVisible}
-                onGridToggle={() => { setGridVisible(v => !v); showToolbar(); }}
-                displayMode={displayMode}
-                onDisplayModeChange={(m) => { setDisplayMode(m); showToolbar(); }}
-                hasSignals={hasSignals}
-                hasImage={hasImage}
-                viewMode={viewMode}
-                onViewModeToggle={
-                  hasSignals && hasImage
-                    ? () => { setViewMode(v => (v === 'signal' ? 'image' : 'signal')); showToolbar(); }
-                    : undefined
-                }
-                fullscreenActive
-                caliperActive={caliper}
-                onCaliperToggle={() => { setCaliper(v => !v); showToolbar(); }}
-              />
+              {!state.toolbarVisible && (
+                <View style={styles.fsHintWrap} pointerEvents="none">
+                  <Text style={styles.fsHintText}>{t.ecg.tapToShowControls}</Text>
+                </View>
+              )}
             </View>
-          </Animated.View>
-
-          {/* Hint "Appuyez pour afficher les contrôles" — visible seulement quand toolbar masquée */}
-          {!toolbarVisible && (
-            <View style={styles.fsHintWrap} pointerEvents="none">
-              <Text style={styles.fsHintText}>{t.ecg.tapToShowControls}</Text>
-            </View>
-          )}
-
-        </View>
-      </Modal>
+          </GestureHandlerRootView>
+        </Modal>
+      )}
     </View>
   );
 }
