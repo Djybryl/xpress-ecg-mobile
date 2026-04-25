@@ -15,22 +15,28 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<UserSession>;
   loginWithBiometrics: () => Promise<UserSession | null>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   isBiometricAvailable: boolean;
   isBiometricEnrolled: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function toUserSession(data: LoginResponse): UserSession {
+function mapProfileUserToSession(u: LoginResponse['user']): UserSession {
   return {
-    id: data.user.id,
-    email: data.user.email,
-    name: data.user.fullName,
-    role: normalizeApiRole(data.user.role),
-    hospitalId: data.user.hospitalId,
-    prescriberFirstLoginAt: data.user.prescriberFirstLoginAt ?? null,
-    prescriberGateStatus: data.user.prescriberGateStatus ?? null,
+    id: u.id,
+    email: u.email,
+    name: u.fullName,
+    role: normalizeApiRole(u.role),
+    hospitalId: u.hospitalId,
+    prescriberFirstLoginAt: u.prescriberFirstLoginAt ?? null,
+    prescriberGateStatus: u.prescriberGateStatus ?? null,
+    signatureUrl: u.signatureUrl ?? u.signature_url ?? null,
   };
+}
+
+function toUserSession(data: LoginResponse): UserSession {
+  return mapProfileUserToSession(data.user);
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -68,6 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               role: normalizeApiRole(me.user.role),
               hospitalId: me.user.hospitalId ?? prev.hospitalId,
               prescriberGateStatus: me.user.prescriberGateStatus ?? prev.prescriberGateStatus,
+              signatureUrl: me.user.signatureUrl ?? me.user.signature_url ?? prev.signatureUrl ?? null,
             } : prev);
           })
           .catch(() => null);
@@ -121,12 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         undefined,
         { timeoutMs: AUTH_REQUEST_TIMEOUT_MS },
       );
-      const session: UserSession = {
-        id: me.user.id, email: me.user.email, name: me.user.fullName,
-        role: normalizeApiRole(me.user.role), hospitalId: me.user.hospitalId,
-        prescriberFirstLoginAt: me.user.prescriberFirstLoginAt ?? null,
-        prescriberGateStatus: me.user.prescriberGateStatus ?? null,
-      };
+      const session = mapProfileUserToSession(me.user);
       await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(session));
       setUser(session);
       return session;
@@ -134,6 +136,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return null;
     }
   }, [isBiometricAvailable, isBiometricEnrolled]);
+
+  const refreshUser = useCallback(async () => {
+    const me = await api.get<{ user: LoginResponse['user'] }>(
+      '/auth/me',
+      undefined,
+      { timeoutMs: AUTH_REQUEST_TIMEOUT_MS },
+    );
+    const session = mapProfileUserToSession(me.user);
+    await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(session));
+    setUser(session);
+  }, []);
 
   const logout = useCallback(async () => {
     try { await api.post('/auth/logout'); } catch { /* ignore */ }
@@ -144,7 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, loading, login, loginWithBiometrics, logout,
+      user, loading, login, loginWithBiometrics, logout, refreshUser,
       isBiometricAvailable, isBiometricEnrolled,
     }}>
       {children}

@@ -1,14 +1,15 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  Alert, ActivityIndicator, Platform,
+  Alert, ActivityIndicator, Platform, Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useAuth } from '@/providers/AuthProvider';
-import { api } from '@/lib/apiClient';
+import { api, getApiErrorMessage } from '@/lib/apiClient';
 import { useTheme, type ThemePreference } from '@/providers/ThemeProvider';
 import { useTranslation, type Locale } from '@/i18n';
 
@@ -81,7 +82,7 @@ const LOCALE_OPTIONS: { key: Locale; label: string; flag: string }[] = [
 ];
 
 export default function ProfileScreenShared() {
-  const { user, logout, isBiometricAvailable, isBiometricEnrolled } = useAuth();
+  const { user, logout, refreshUser, isBiometricAvailable, isBiometricEnrolled } = useAuth();
   const { colors: joyful, preference, setPreference } = useTheme();
   const { locale, setLocale } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -89,6 +90,87 @@ export default function ProfileScreenShared() {
   const [kpiLoading] = useState(false);
 
   const [ratioStatus, setRatioStatus] = useState<'OK' | 'ALERT' | 'SUSPENDED' | null>(null);
+
+  const [signatureBusy, setSignatureBusy] = useState(false);
+  const signatureUrl = user?.signatureUrl ?? (user as { signature_url?: string | null })?.signature_url ?? null;
+
+  const handlePickSignature = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission requise',
+        'Autorisez l\'accès à la galerie pour importer votre signature.',
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 1,
+      base64: false,
+    });
+
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+
+    if (asset.fileSize && asset.fileSize > 2 * 1024 * 1024) {
+      Alert.alert('Fichier trop volumineux', 'La signature ne doit pas dépasser 2 Mo.');
+      return;
+    }
+
+    const mimeType = asset.mimeType ?? 'image/jpeg';
+    const ext = mimeType.includes('png') ? 'png'
+      : mimeType.includes('webp') ? 'webp' : 'jpg';
+
+    const formData = new FormData();
+    formData.append('signature', {
+      uri: asset.uri,
+      name: `signature.${ext}`,
+      type: mimeType,
+    } as never);
+
+    setSignatureBusy(true);
+    try {
+      await api.upload('/users/me/signature', formData, { method: 'PATCH' });
+      await refreshUser();
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(
+        'Signature enregistrée',
+        'Votre signature sera apposée sur vos rapports PDF.',
+      );
+    } catch (e) {
+      Alert.alert('Erreur', getApiErrorMessage(e));
+    } finally {
+      setSignatureBusy(false);
+    }
+  }, [refreshUser]);
+
+  const handleDeleteSignature = useCallback(() => {
+    Alert.alert(
+      'Supprimer la signature',
+      'Votre signature ne sera plus apposée sur les prochains rapports PDF. Continuer ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            setSignatureBusy(true);
+            try {
+              await api.delete('/users/me/signature');
+              await refreshUser();
+              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            } catch (e) {
+              Alert.alert('Erreur', getApiErrorMessage(e));
+            } finally {
+              setSignatureBusy(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [refreshUser]);
 
   useEffect(() => {
     if (user?.role !== 'cardiologue') return;
@@ -238,6 +320,83 @@ export default function ProfileScreenShared() {
             })}
           </View>
         </View>
+
+        {user?.role === 'cardiologue' && (
+          <View className="mx-4 mt-4 bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800 shadow-sm mb-4 overflow-hidden">
+            <Text className="text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wider px-4 pt-4 pb-3">
+              Signature électronique
+            </Text>
+            {signatureUrl ? (
+              <View className="px-4 pb-4">
+                <View
+                  className="rounded-xl overflow-hidden border border-gray-200 dark:border-zinc-700 mb-3"
+                  style={{ height: 80, backgroundColor: '#f9fafb' }}
+                >
+                  <Image
+                    source={{ uri: signatureUrl }}
+                    style={{ width: '100%', height: 80 }}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text className="text-xs text-gray-400 dark:text-zinc-500 mb-3 text-center">
+                  Cette signature est apposée automatiquement sur vos rapports PDF
+                </Text>
+                <View className="flex-row gap-2">
+                  <TouchableOpacity
+                    className="flex-1 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50 dark:bg-indigo-950/40 dark:border-indigo-800 items-center"
+                    onPress={() => { void handlePickSignature(); }}
+                    disabled={signatureBusy}
+                    activeOpacity={0.8}
+                  >
+                    {signatureBusy
+                      ? <ActivityIndicator size="small" color={joyful.primary} />
+                      : (
+                        <Text className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+                          Remplacer
+                        </Text>
+                      )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="flex-1 py-2.5 rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-900 items-center"
+                    onPress={handleDeleteSignature}
+                    disabled={signatureBusy}
+                    activeOpacity={0.8}
+                  >
+                    <Text className="text-xs font-semibold text-red-600 dark:text-red-400">
+                      Supprimer
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View className="px-4 pb-4">
+                <TouchableOpacity
+                  className="border-2 border-dashed border-indigo-200 dark:border-indigo-800 rounded-xl py-6 items-center justify-center bg-indigo-50/50 dark:bg-indigo-950/20"
+                  onPress={() => { void handlePickSignature(); }}
+                  disabled={signatureBusy}
+                  activeOpacity={0.8}
+                >
+                  {signatureBusy ? (
+                    <ActivityIndicator color={joyful.primary} />
+                  ) : (
+                    <>
+                      <Text className="text-2xl mb-2">✍️</Text>
+                      <Text className="text-sm font-semibold text-indigo-700 dark:text-indigo-300 mb-1">
+                        Déposer ma signature
+                      </Text>
+                      <Text className="text-xs text-gray-400 dark:text-zinc-500 text-center px-4">
+                        PNG, JPG ou WEBP · max 2 Mo
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <Text className="text-xs text-gray-400 dark:text-zinc-500 mt-2 text-center">
+                  Apposée automatiquement sur tous vos rapports PDF
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Compte */}
         <View className="mx-4 bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800 shadow-sm shadow-gray-100 dark:shadow-none mb-4 overflow-hidden">

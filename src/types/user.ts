@@ -9,6 +9,8 @@ export interface UserSession {
   hospitalId?: string | null;
   prescriberFirstLoginAt?: string | null;
   prescriberGateStatus?: string | null;
+  /** URL publique signature PDF (cardiologue) */
+  signatureUrl?: string | null;
 }
 
 export interface BackendUser {
@@ -20,6 +22,8 @@ export interface BackendUser {
   hospitalId: string | null;
   prescriberFirstLoginAt?: string | null;
   prescriberGateStatus?: string | null;
+  signatureUrl?: string | null;
+  signature_url?: string | null;
 }
 
 export interface BackendTokens {

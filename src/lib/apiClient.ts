@@ -34,9 +34,17 @@ export const tokenStorage = {
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
+/** Métadonnées pagination renvoyées par certains GET liste (ex. `/reports`). */
+export interface ApiListMeta {
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
+  meta?: ApiListMeta;
   error?: { code: string; message: string; details?: unknown };
 }
 
@@ -160,7 +168,7 @@ const DEFAULT_TIMEOUT_MS = 25_000;
 /** Connexion initiale et restauration session : plus tolérant au tunnel. */
 export const AUTH_REQUEST_TIMEOUT_MS = 45_000;
 
-async function request<T>(
+async function rawRequest<T>(
   method: string,
   path: string,
   options: {
@@ -170,7 +178,7 @@ async function request<T>(
     formData?: FormData;
     timeoutMs?: number;
   } = {},
-): Promise<T> {
+): Promise<ApiResponse<T>> {
   const { body, params, isRetry = false, formData, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
 
   const url = new URL(`${BASE_URL}/api/v1${path}`);
@@ -224,7 +232,7 @@ async function request<T>(
   if (res.status === 401 && !isRetry) {
     try {
       await refreshAccessToken();
-      return request<T>(method, path, { ...options, isRetry: true });
+      return rawRequest<T>(method, path, { ...options, isRetry: true });
     } catch {
       await tokenStorage.clear();
       notifySessionExpired();
@@ -244,6 +252,21 @@ async function request<T>(
       json.error?.details,
     );
   }
+  return json;
+}
+
+async function request<T>(
+  method: string,
+  path: string,
+  options: {
+    body?: unknown;
+    params?: Record<string, string | number | boolean | undefined>;
+    isRetry?: boolean;
+    formData?: FormData;
+    timeoutMs?: number;
+  } = {},
+): Promise<T> {
+  const json = await rawRequest<T>(method, path, options);
   return json.data as T;
 }
 
@@ -254,6 +277,8 @@ const UPLOAD_TIMEOUT_MS = 120_000; // Upload fichiers ECG : garder long
 export interface UploadOptions {
   onProgress?: (percent: number) => void;
   timeoutMs?: number;
+  /** Par défaut POST. PATCH pour routes multipart (ex. signature cardiologue). */
+  method?: 'POST' | 'PATCH';
 }
 
 async function uploadWithProgress<T>(
@@ -261,7 +286,7 @@ async function uploadWithProgress<T>(
   formData: FormData,
   options: UploadOptions = {},
 ): Promise<T> {
-  const { onProgress, timeoutMs = UPLOAD_TIMEOUT_MS } = options;
+  const { onProgress, timeoutMs = UPLOAD_TIMEOUT_MS, method = 'POST' } = options;
 
   const token = await tokenStorage.getAccess();
   const url = `${BASE_URL}/api/v1${path}`;
@@ -309,7 +334,7 @@ async function uploadWithProgress<T>(
       reject(new ApiError(0, 'REQUEST_TIMEOUT', 'Envoi annulé.'));
     };
 
-    xhr.open('POST', url);
+    xhr.open(method, url);
     xhr.setRequestHeader('ngrok-skip-browser-warning', 'true');
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.send(formData);
@@ -326,6 +351,16 @@ export const api = {
     params?: Record<string, string | number | boolean | undefined>,
     options?: ApiRequestOptions,
   ) => request<T>('GET', path, { params, timeoutMs: options?.timeoutMs }),
+  getList: async <T>(
+    path: string,
+    params?: Record<string, string | number | boolean | undefined>,
+    options?: ApiRequestOptions,
+  ): Promise<{ items: T[]; meta: ApiListMeta }> => {
+    const json = await rawRequest<T[]>('GET', path, { params, timeoutMs: options?.timeoutMs });
+    const items = (json.data ?? []) as T[];
+    const meta = json.meta ?? { total: items.length, page: 1, limit: items.length };
+    return { items, meta };
+  },
   post: <T>(path: string, body?: unknown, options?: ApiRequestOptions) =>
     request<T>('POST', path, { body, timeoutMs: options?.timeoutMs }),
   patch: <T>(path: string, body?: unknown, options?: ApiRequestOptions) =>
