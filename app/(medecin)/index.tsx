@@ -361,6 +361,50 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {/* Section Mon compte */}
+        <View className="mx-4 mt-4">
+          <Text className="text-sm font-semibold text-gray-700 dark:text-zinc-200 mb-2">Mon compte</Text>
+          <View className="bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden border border-gray-100 dark:border-zinc-800 shadow-sm shadow-gray-100 dark:shadow-none">
+            {/* Mes patients */}
+            <TouchableOpacity
+              className="flex-row items-center px-4 py-3"
+              onPress={() => router.push('/(medecin)/patients')}
+              activeOpacity={0.7}
+            >
+              <View className="w-8 h-8 rounded-full bg-indigo-100 items-center justify-center mr-3">
+                <Ionicons name="people-outline" size={16} color="#4f46e5" />
+              </View>
+              <Text className="flex-1 text-sm font-medium text-gray-900 dark:text-zinc-100">
+                Mes patients
+              </Text>
+              <Text className="text-xs text-gray-400 dark:text-zinc-500 mr-2">
+                {patients.length > 0 ? `${patients.length}` : ''}
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color="#d1d5db" />
+            </TouchableOpacity>
+
+            <View className="h-px bg-gray-100 dark:bg-zinc-800 mx-4" />
+
+            {/* Mes justificatifs */}
+            <TouchableOpacity
+              className="flex-row items-center px-4 py-3"
+              onPress={() => router.push('/(medecin)/documents')}
+              activeOpacity={0.7}
+            >
+              <View className="w-8 h-8 rounded-full bg-amber-100 items-center justify-center mr-3">
+                <Ionicons name="shield-checkmark-outline" size={16} color="#d97706" />
+              </View>
+              <Text className="flex-1 text-sm font-medium text-gray-900 dark:text-zinc-100">
+                Mes justificatifs
+              </Text>
+              {user?.prescriberGateStatus !== 'verified' && (
+                <View className="bg-red-500 w-2 h-2 rounded-full mr-2" />
+              )}
+              <Ionicons name="chevron-forward" size={14} color="#d1d5db" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Bouton Nouvel ECG */}
         <TouchableOpacity
           className="mx-4 mt-5 bg-indigo-600 rounded-2xl py-4 items-center flex-row justify-center gap-2 shadow-md shadow-indigo-300"

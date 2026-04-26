@@ -245,6 +245,10 @@ export default function TabLayout() {
         name="patient-history"
         options={{ href: null, title: 'Historique patient' }}
       />
+      <Tabs.Screen
+        name="documents"
+        options={{ href: null, title: 'Mes justificatifs' }}
+      />
     </Tabs>
   );
 }
