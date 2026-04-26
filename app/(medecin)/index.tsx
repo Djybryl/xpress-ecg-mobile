@@ -4,6 +4,7 @@ import {
   RefreshControl, ActivityIndicator, Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -11,6 +12,7 @@ import { useAuth } from '@/providers/AuthProvider';
 import { useEcgList, type EcgRecordItem } from '@/hooks/useEcgList';
 import { useReportList, type ReportItem } from '@/hooks/useReportList';
 import { useEconomyMe } from '@/hooks/useEconomyMe';
+import { usePatientList } from '@/hooks/usePatientList';
 
 /**
  * Supprime le préfixe de titre médical (Dr, Dr., Pr, Pr.) en début de nom,
@@ -87,10 +89,13 @@ export default function HomeScreen() {
     reports, unreadCount, urgentUnreadCount, loading: reportsLoading, refetch: refetchReports,
   } = useReportList({
     referring_doctor_id: user?.id,
+    limit: 100,
     enabled: !!user?.id,
   });
 
   const { data: economy, refetch: refetchEconomy } = useEconomyMe(!!user?.id);
+
+  const { patients, refetch: refetchPatients } = usePatientList({ limit: 200, enabled: !!user?.id });
 
   const ecgUsed      = economy?.quota?.ecg_used ?? economy?.subscription?.ecg_used_this_month ?? 0;
   const ecgLimit     = economy?.quota?.ecg_limit ?? economy?.subscription?.monthly_ecg_quota ?? 0;
@@ -99,9 +104,9 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchEcg(), refetchReports(), refetchEconomy()]);
+    await Promise.all([refetchEcg(), refetchReports(), refetchEconomy(), refetchPatients()]);
     setRefreshing(false);
-  }, [refetchEcg, refetchReports, refetchEconomy]);
+  }, [refetchEcg, refetchReports, refetchEconomy, refetchPatients]);
 
   const pendingCount  = ecgRecords.filter(e => e.status === 'pending').length;
   const analyzingCount = ecgRecords.filter(e => e.status === 'analyzing' || e.status === 'assigned').length;
@@ -186,6 +191,24 @@ export default function HomeScreen() {
             )
           }
         </View>
+
+        {/* Raccourci Mes patients */}
+        <TouchableOpacity
+          className="mx-4 mt-3 bg-white dark:bg-zinc-900 rounded-2xl p-4 flex-row items-center border border-gray-100 dark:border-zinc-800 shadow-sm shadow-gray-100 dark:shadow-none"
+          activeOpacity={0.8}
+          onPress={() => router.push('/(medecin)/patients')}
+        >
+          <View className="w-10 h-10 rounded-full bg-indigo-100 items-center justify-center mr-3">
+            <Ionicons name="people-outline" size={20} color="#4f46e5" />
+          </View>
+          <View className="flex-1">
+            <Text className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Mes patients</Text>
+            <Text className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+              {isLoading ? '…' : `${patients.length} patient${patients.length !== 1 ? 's' : ''} enregistré${patients.length !== 1 ? 's' : ''}`}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#d1d5db" />
+        </TouchableOpacity>
 
         {/* Quota ECG mensuel — plan gratuit uniquement */}
         {isFreeQuota && (

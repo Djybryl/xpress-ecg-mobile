@@ -236,6 +236,15 @@ export default function TabLayout() {
           ),
         }}
       />
+      {/* Écrans accessibles par navigation, non visibles dans la tab bar */}
+      <Tabs.Screen
+        name="patients"
+        options={{ href: null, title: 'Mes patients' }}
+      />
+      <Tabs.Screen
+        name="patient-history"
+        options={{ href: null, title: 'Historique patient' }}
+      />
     </Tabs>
   );
 }
