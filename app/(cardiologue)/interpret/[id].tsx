@@ -24,6 +24,7 @@ import { ECGTraceView } from '@/components/ecg/ECGTraceView';
 import { useInterpretDraft } from '@/hooks/useInterpretDraft';
 import { getAxisPresets, getRhythmPresets } from '@/constants/interpretPresets';
 import { buildMeasurementsPayload } from '@/lib/interpretMeasurements';
+import { getAlertLevel, type AlertLevel } from '@/lib/ecg-clinical-thresholds';
 import { useTranslation } from '@/i18n';
 
 type FormTab = 'mesures' | 'conclusion';
@@ -131,11 +132,34 @@ export default function InterpretEcgScreen() {
     didApplyRecordHr.current = true;
   }, [draftRestored, record, heartRate]);
 
+  const alertLevels = useMemo(() => ({
+    fc:  getAlertLevel('fc',  heartRate,   record?.gender),
+    pr:  getAlertLevel('pr',  prInterval,  record?.gender),
+    qrs: getAlertLevel('qrs', qrsDuration, record?.gender),
+    qtc: getAlertLevel('qtc', qtInterval,  record?.gender),
+  }), [heartRate, prInterval, qrsDuration, qtInterval, record?.gender]);
+
+  const hasCritical = useMemo(
+    () => (Object.values(alertLevels) as AlertLevel[]).some(l => l === 'critical'),
+    [alertLevels],
+  );
+  const hasWarning = useMemo(
+    () => (Object.values(alertLevels) as AlertLevel[]).some(l => l === 'warning'),
+    [alertLevels],
+  );
+
   const isAssignedToMe = record?.assigned_to === user?.id;
-  const canStartAnalysis = record?.status === 'validated' && !record?.assigned_to;
+  const preAnalyzing =
+    record?.status === 'pending' || record?.status === 'validated' || record?.status === 'assigned';
+  const canStartAnalysis =
+    !!record &&
+    !!preAnalyzing &&
+    (!record.assigned_to || record.assigned_to === user?.id);
   const isAnalyzing = record?.status === 'analyzing' && isAssignedToMe;
-  const isAssigned = record?.status === 'assigned' && isAssignedToMe;
-  const isReadOnly = !!record && !canStartAnalysis && !isAnalyzing && !isAssigned && !analysisStarted;
+  const isReadOnly =
+    !!record &&
+    (record.status === 'completed' ||
+      (!canStartAnalysis && !isAnalyzing && !analysisStarted));
 
   const completionItems = useMemo(
     () => ({
@@ -567,6 +591,70 @@ export default function InterpretEcgScreen() {
           {/* TAB MESURES */}
           {(!isReadOnly && activeTab === 'mesures') && (
             <View>
+              {/* Bandeaux alertes cliniques */}
+              {hasCritical && (
+                <View style={{
+                  backgroundColor: '#fef2f2',
+                  borderLeftWidth: 4, borderLeftColor: '#ef4444',
+                  padding: 12, marginBottom: 10, borderRadius: 8,
+                }}>
+                  <Text style={{ color: '#991b1b', fontWeight: '700', fontSize: 13, marginBottom: 4 }}>
+                    ⚠ Valeur(s) critique(s) — vérifier avant validation
+                  </Text>
+                  {alertLevels.fc === 'critical' && (
+                    <Text style={{ color: '#991b1b', fontSize: 12, marginTop: 3 }}>
+                      • FC : {heartRate} bpm
+                    </Text>
+                  )}
+                  {alertLevels.pr === 'critical' && (
+                    <Text style={{ color: '#991b1b', fontSize: 12, marginTop: 3 }}>
+                      • PR : {prInterval} ms
+                    </Text>
+                  )}
+                  {alertLevels.qrs === 'critical' && (
+                    <Text style={{ color: '#991b1b', fontSize: 12, marginTop: 3 }}>
+                      • QRS : {qrsDuration} ms
+                    </Text>
+                  )}
+                  {alertLevels.qtc === 'critical' && (
+                    <Text style={{ color: '#991b1b', fontSize: 12, marginTop: 3 }}>
+                      • QTc : {qtInterval} ms — risque torsades de pointes
+                    </Text>
+                  )}
+                </View>
+              )}
+              {hasWarning && !hasCritical && (
+                <View style={{
+                  backgroundColor: '#fffbeb',
+                  borderLeftWidth: 4, borderLeftColor: '#f59e0b',
+                  padding: 12, marginBottom: 10, borderRadius: 8,
+                }}>
+                  <Text style={{ color: '#92400e', fontWeight: '700', fontSize: 13, marginBottom: 4 }}>
+                    ⚠ Valeurs à surveiller
+                  </Text>
+                  {alertLevels.fc === 'warning' && (
+                    <Text style={{ color: '#92400e', fontSize: 12, marginTop: 3 }}>
+                      • FC : {heartRate} bpm
+                    </Text>
+                  )}
+                  {alertLevels.pr === 'warning' && (
+                    <Text style={{ color: '#92400e', fontSize: 12, marginTop: 3 }}>
+                      • PR : {prInterval} ms
+                    </Text>
+                  )}
+                  {alertLevels.qrs === 'warning' && (
+                    <Text style={{ color: '#92400e', fontSize: 12, marginTop: 3 }}>
+                      • QRS : {qrsDuration} ms
+                    </Text>
+                  )}
+                  {alertLevels.qtc === 'warning' && (
+                    <Text style={{ color: '#92400e', fontSize: 12, marginTop: 3 }}>
+                      • QTc : {qtInterval} ms
+                    </Text>
+                  )}
+                </View>
+              )}
+
               {/* Rythme */}
               <Text className="text-gray-800 dark:text-zinc-100 font-bold text-sm mb-1.5" accessibilityRole="header">
                 {t.interpret.rhythm}
@@ -661,6 +749,11 @@ export default function InterpretEcgScreen() {
               </Text>
               <TextInput
                 className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-zinc-100 mb-4"
+                style={alertLevels.fc === 'critical'
+                  ? { borderColor: '#ef4444', backgroundColor: '#fef2f2' }
+                  : alertLevels.fc === 'warning'
+                  ? { borderColor: '#f59e0b', backgroundColor: '#fffbeb' }
+                  : undefined}
                 placeholder={t.interpret.fcPlaceholder}
                 placeholderTextColor="#9ca3af"
                 keyboardType="number-pad"
@@ -678,6 +771,11 @@ export default function InterpretEcgScreen() {
                   <Text className="text-[10px] text-gray-500 dark:text-zinc-400 mb-1">{t.interpret.prInterval}</Text>
                   <TextInput
                     className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-zinc-100"
+                    style={alertLevels.pr === 'critical'
+                      ? { borderColor: '#ef4444', backgroundColor: '#fef2f2' }
+                      : alertLevels.pr === 'warning'
+                      ? { borderColor: '#f59e0b', backgroundColor: '#fffbeb' }
+                      : undefined}
                     placeholder={t.interpret.emptyDash}
                     placeholderTextColor="#9ca3af"
                     keyboardType="number-pad"
@@ -690,6 +788,11 @@ export default function InterpretEcgScreen() {
                   <Text className="text-[10px] text-gray-500 dark:text-zinc-400 mb-1">{t.interpret.qrsDuration}</Text>
                   <TextInput
                     className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-zinc-100"
+                    style={alertLevels.qrs === 'critical'
+                      ? { borderColor: '#ef4444', backgroundColor: '#fef2f2' }
+                      : alertLevels.qrs === 'warning'
+                      ? { borderColor: '#f59e0b', backgroundColor: '#fffbeb' }
+                      : undefined}
                     placeholder={t.interpret.emptyDash}
                     placeholderTextColor="#9ca3af"
                     keyboardType="number-pad"
@@ -702,6 +805,11 @@ export default function InterpretEcgScreen() {
                   <Text className="text-[10px] text-gray-500 dark:text-zinc-400 mb-1">{t.interpret.qtInterval}</Text>
                   <TextInput
                     className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-zinc-100"
+                    style={alertLevels.qtc === 'critical'
+                      ? { borderColor: '#ef4444', backgroundColor: '#fef2f2' }
+                      : alertLevels.qtc === 'warning'
+                      ? { borderColor: '#f59e0b', backgroundColor: '#fffbeb' }
+                      : undefined}
                     placeholder={t.interpret.emptyDash}
                     placeholderTextColor="#9ca3af"
                     keyboardType="number-pad"
@@ -730,7 +838,7 @@ export default function InterpretEcgScreen() {
               />
 
               {/* Lien second avis */}
-              {(isAnalyzing || isAssigned || analysisStarted) && (
+              {(isAnalyzing || analysisStarted) && (
                 <TouchableOpacity
                   onPress={() => router.push(`/(cardiologue)/request-second-opinion?ecg_record_id=${id}` as Href)}
                   accessibilityRole="button"
@@ -929,7 +1037,7 @@ export default function InterpretEcgScreen() {
         >
           {!isReadOnly && (
             <View className="flex-row gap-3">
-              {(isAnalyzing || isAssigned || analysisStarted) && (
+              {(isAnalyzing || analysisStarted) && (
                 <TouchableOpacity
                   onPress={handleAbandon}
                   className="px-4 py-2.5 rounded-xl border border-red-200 dark:border-red-800 items-center justify-center"
