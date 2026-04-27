@@ -1,0 +1,115 @@
+module.exports = ({ config }) => ({
+  ...config,
+  expo: {
+    ...config.expo,
+    name: 'Xpress ECG',
+    slug: 'xpress-ecg-mobile',
+    version: '1.0.0',
+    orientation: 'default',
+    icon: './assets/icon.png',
+    userInterfaceStyle: 'light',
+    splash: {
+      image: './assets/splash.png',
+      resizeMode: 'contain',
+      backgroundColor: '#4f46e5',
+    },
+    ios: {
+      supportsTablet: false,
+      bundleIdentifier: 'com.dnr.xpressecg',
+      infoPlist: {
+        UIFileSharingEnabled: true,
+        LSSupportsOpeningDocumentsInPlace: true,
+        NSCameraUsageDescription:
+          'Xpress ECG utilise la caméra pour photographier les tracés ECG.',
+        NSPhotoLibraryUsageDescription:
+          "Xpress ECG accède à vos photos pour vous permettre de sélectionner une image d'ECG.",
+        NSPhotoLibraryAddUsageDescription:
+          'Xpress ECG peut enregistrer une image dans votre photothèque lorsque vous le choisissez.',
+        NSFaceIDUsageDescription: 'Xpress ECG utilise Face ID pour sécuriser votre accès.',
+        NSMicrophoneUsageDescription:
+          "Xpress ECG n'utilise pas le micro pour les ECG ; cette autorisation peut être requise par le système pour l'aperçu caméra.",
+        UIBackgroundModes: ['remote-notification'],
+      },
+    },
+    android: {
+      softwareKeyboardLayoutMode: 'resize',
+      usesCleartextTraffic: false,
+      adaptiveIcon: {
+        foregroundImage: './assets/adaptive-icon.png',
+        backgroundColor: '#4f46e5',
+      },
+      package: 'com.dnr.xpressecg',
+      googleServicesFile:
+        process.env.GOOGLE_SERVICES_JSON ?? './google-services.json',
+      permissions: [
+        'android.permission.CAMERA',
+        'android.permission.READ_MEDIA_IMAGES',
+        'android.permission.READ_EXTERNAL_STORAGE',
+        'android.permission.WRITE_EXTERNAL_STORAGE',
+        'android.permission.USE_BIOMETRIC',
+        'android.permission.USE_FINGERPRINT',
+        'android.permission.RECEIVE_BOOT_COMPLETED',
+        'android.permission.VIBRATE',
+      ],
+    },
+    web: {
+      bundler: 'metro',
+      output: 'single',
+      favicon: './assets/favicon.png',
+    },
+    plugins: [
+      'expo-router',
+      [
+        'react-native-document-scanner-plugin',
+        {
+          cameraPermission:
+            'Xpress ECG utilise la caméra pour scanner ou photographier les tracés ECG.',
+        },
+      ],
+      [
+        'expo-camera',
+        {
+          cameraPermission:
+            'Xpress ECG utilise la caméra pour photographier les tracés ECG.',
+          microphonePermission: 'Non utilisé pour les ECG.',
+          recordAudioAndroid: false,
+        },
+      ],
+      [
+        'expo-image-picker',
+        {
+          photosPermission:
+            "Xpress ECG accède à vos photos pour vous permettre de choisir une image d'ECG.",
+          cameraPermission:
+            'Xpress ECG utilise la caméra pour photographier les tracés ECG.',
+          microphonePermission: false,
+        },
+      ],
+      [
+        'expo-local-authentication',
+        {
+          faceIDPermission: 'Xpress ECG utilise Face ID pour sécuriser votre accès.',
+        },
+      ],
+      [
+        'expo-notifications',
+        {
+          icon: './assets/notification-icon.png',
+          color: '#6D28D9',
+          sounds: [],
+          enableBackgroundRemoteNotifications: true,
+        },
+      ],
+    ],
+    experiments: {
+      typedRoutes: true,
+    },
+    scheme: 'xpressecg',
+    extra: {
+      router: {},
+      eas: {
+        projectId: 'fda958cd-4acb-4462-a498-14e3f3f3b9d5',
+      },
+    },
+  },
+});

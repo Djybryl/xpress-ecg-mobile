@@ -13,8 +13,7 @@
       },
       "android": {
         "buildType": "apk",
-        "gradleCommand": ":app:assembleDebug",
-        "googleServicesFile": "$GOOGLE_SERVICES_JSON"
+        "gradleCommand": ":app:assembleDebug"
       },
       "ios": {
         "simulator": false
