@@ -39,7 +39,8 @@
         "EXPO_PUBLIC_API_URL": "https://api.xpress-ecg.com/api/v1"
       },
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "app-bundle",
+        "googleServicesFile": "$GOOGLE_SERVICES_JSON"
       },
       "channel": "production",
       "autoIncrement": true
