@@ -42,7 +42,7 @@
         "buildType": "app-bundle"
       },
       "channel": "production",
-      "autoIncrement": "buildNumber"
+      "autoIncrement": true
     }
   },
   "submit": {
