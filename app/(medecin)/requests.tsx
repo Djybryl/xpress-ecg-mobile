@@ -33,14 +33,14 @@ function StatusBadge({ item }: { item: EcgRecordItem }) {
   const { status, assigned_to } = item;
   if (status === 'analyzing') {
     return (
-      <View className="bg-blue-100 px-2 py-0.5 rounded-full">
+      <View className="bg-blue-100 px-2 py-0.5 rounded-full" accessible={false} importantForAccessibility="no">
         <Text className="text-blue-700 text-[10px] font-medium">En analyse</Text>
       </View>
     );
   }
   if (status === 'completed') {
     return (
-      <View className="bg-green-100 px-2 py-0.5 rounded-full">
+      <View className="bg-green-100 px-2 py-0.5 rounded-full" accessible={false} importantForAccessibility="no">
         <Text className="text-green-700 text-[10px] font-medium">Terminé</Text>
       </View>
     );
@@ -55,7 +55,7 @@ function StatusBadge({ item }: { item: EcgRecordItem }) {
   }[status] ?? { label: status, bg: 'bg-gray-100', text: 'text-gray-600' };
 
   return (
-    <View className={`${config.bg} px-2 py-0.5 rounded-full`}>
+    <View className={`${config.bg} px-2 py-0.5 rounded-full`} accessible={false} importantForAccessibility="no">
       <Text className={`${config.text} text-[10px] font-medium`}>{config.label}</Text>
     </View>
   );
@@ -71,6 +71,9 @@ function EcgCard({ item, onPress }: { item: EcgRecordItem; onPress: () => void }
       className={`bg-white dark:bg-zinc-900 rounded-2xl p-4 mb-3 border ${isUrgent ? 'border-red-200 dark:border-red-900' : 'border-gray-100 dark:border-zinc-800'} shadow-sm shadow-gray-100 dark:shadow-none`}
       activeOpacity={0.8}
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`ECG ${item.patient_name}${isUrgent ? ', urgent' : ''}, ${item.reference}, statut : ${item.status === 'completed' ? 'Rapport disponible' : item.status === 'analyzing' ? 'En analyse' : 'En attente'}`}
+      accessibilityHint="Appuyez pour voir les détails de cette demande"
     >
       <View className="flex-row items-start">
         <View className={`w-10 h-10 rounded-full ${isUrgent ? 'bg-red-100' : 'bg-indigo-100'} items-center justify-center mr-3 mt-0.5`}>
@@ -169,9 +172,11 @@ export default function RequestsScreen() {
             placeholderTextColor="#9ca3af"
             value={search}
             onChangeText={setSearch}
+            accessibilityLabel="Rechercher un patient ou une référence ECG"
+            accessibilityHint="Saisissez un nom ou une référence"
           />
           {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
+            <TouchableOpacity onPress={() => setSearch('')} accessibilityRole="button" accessibilityLabel="Effacer la recherche">
               <Text className="text-gray-400 text-lg leading-none">×</Text>
             </TouchableOpacity>
           )}
@@ -188,6 +193,9 @@ export default function RequestsScreen() {
                   : 'bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-600'
               }`}
               onPress={() => setStatusFilter(f.key)}
+              accessibilityRole="button"
+              accessibilityLabel={`Filtrer : ${f.label}`}
+              accessibilityState={{ selected: statusFilter === f.key }}
             >
               <Text className={`text-xs font-medium ${
                 statusFilter === f.key ? 'text-white' : 'text-gray-600 dark:text-zinc-300'
@@ -267,6 +275,7 @@ export default function RequestsScreen() {
         transparent
         animationType="slide"
         onRequestClose={() => setSelectedEcg(null)}
+        accessibilityViewIsModal={true}
       >
         <Pressable
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }}
