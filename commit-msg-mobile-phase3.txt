@@ -1,8 +1,0 @@
-feat: accessibilite VoiceOver TalkBack et evolutions fonctionnelles
-
-Accessibilite :
-- Stack racine et pile auth : titres d'ecran annonces VoiceOver TalkBack
-- Ecran connexion : TextInput accessibilityLabel accessibilityHint, etats busy, bouton biometric texte Face ID ou empreinte
-- Onglets medecin cardiologue secretaire admin : tabBarAccessibilityLabel ; badges file ECG et second avis ; TabIcon accessible false
-
-Inclus aussi : listes ECG rapports medecin, viewers ECG, scripts Expo, EAS, hooks, types (modifications locales non decoupees).
