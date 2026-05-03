@@ -155,6 +155,12 @@ function printTunnelBanner(port) {
   console.log('  Conseils si echec : npx expo login | VPN desactive | reseau stable');
   console.log('  Android USB : si erreur ADB, debranchez le cable ou installez adb reverse.');
   console.log('');
+  console.log('  Si erreur "ECONNREFUSED 127.0.0.1:4040" ou ":4041" :');
+  console.log('    - Metro tente de joindre l API locale du ngrok embarque ; rien n ecoute.');
+  console.log('    - Relancez : le script tue ngrok.exe avant le tunnel ; sinon : taskkill /F /IM ngrok.exe');
+  console.log('    - Verifiez qu aucun autre Metro/ngrok ne tourne ; desactivez VPN / proxy.');
+  console.log('    - Meme WiFi que le PC : preferez  npm run start:lan:devclient  (pas de tunnel).');
+  console.log('');
   console.log('  Port Metro local : ' + port);
   console.log('===================================================================');
   console.log('');

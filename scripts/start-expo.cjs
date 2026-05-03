@@ -56,6 +56,41 @@ function killPort(p) {
 
 killPort(port);
 
+/**
+ * Le tunnel Expo (@expo/ngrok) demarre un ngrok embarque qui expose une API locale
+ * (souvent 127.0.0.1:4040 ; 4041 si 4040 occupe). Si une vieille instance ngrok est
+ * zombie ou le port est pris, Metro affiche : connect ECONNREFUSED 127.0.0.1:4041
+ */
+function killStaleNgrokForTunnel() {
+  try {
+    if (process.platform === 'win32') {
+      execSync('taskkill /F /IM ngrok.exe', { stdio: 'pipe', timeout: 8000 });
+      console.log('  [start-expo] Anciennes instances ngrok.exe arretees (tunnel).');
+    } else {
+      try {
+        execSync('pkill -9 ngrok', { stdio: 'pipe', timeout: 8000 });
+      } catch {
+        /* aucun processus ngrok */
+      }
+    }
+  } catch {
+    /* aucun ngrok ou deja arrete */
+  }
+  try {
+    if (process.platform === 'win32') {
+      execSync('timeout /t 1 /nobreak >nul', { stdio: 'pipe', timeout: 3000, shell: true });
+    } else {
+      execSync('sleep 1', { stdio: 'pipe', timeout: 3000 });
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+if (useTunnel) {
+  killStaleNgrokForTunnel();
+}
+
 process.env.EXPO_METRO_PORT = port;
 
 /* ── Force l'IP dans le manifeste Expo ── */

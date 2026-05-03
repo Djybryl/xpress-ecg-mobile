@@ -30,13 +30,29 @@ function timeAgo(dateStr: string): string {
   return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(new Date(dateStr));
 }
 
-function StatusBadge({ status }: { status: EcgRecordItem['status'] }) {
+function StatusBadge({ item }: { item: EcgRecordItem }) {
+  const { status, assigned_to } = item;
+  if (status === 'analyzing') {
+    return (
+      <View className="bg-blue-100 px-2 py-0.5 rounded-full">
+        <Text className="text-blue-700 text-[10px] font-medium">En analyse</Text>
+      </View>
+    );
+  }
+  if (status === 'completed') {
+    return (
+      <View className="bg-green-100 px-2 py-0.5 rounded-full">
+        <Text className="text-green-700 text-[10px] font-medium">Terminé</Text>
+      </View>
+    );
+  }
+  const reserved = !!assigned_to;
   const config = {
-    pending:   { label: 'En attente',  bg: 'bg-amber-100',  text: 'text-amber-700' },
-    assigned:  { label: 'Assigné',     bg: 'bg-sky-100',    text: 'text-sky-700' },
+    pending:   { label: reserved ? 'En attente · réservé' : 'En attente', bg: 'bg-amber-100', text: 'text-amber-700' },
+    assigned:  { label: reserved ? 'En attente · réservé' : 'En attente', bg: 'bg-amber-100', text: 'text-amber-700' },
     analyzing: { label: 'En analyse',  bg: 'bg-blue-100',   text: 'text-blue-700' },
     completed: { label: 'Terminé',     bg: 'bg-green-100',  text: 'text-green-700' },
-    validated: { label: 'Validé',      bg: 'bg-emerald-100', text: 'text-emerald-700' },
+    validated: { label: reserved ? 'En attente · réservé' : 'En attente', bg: 'bg-amber-100', text: 'text-amber-700' },
   }[status] ?? { label: status, bg: 'bg-gray-100', text: 'text-gray-600' };
 
   return (
@@ -62,13 +78,15 @@ export default function CardiologueQueueScreen() {
     const uid = user?.id;
     if (chip === 'pool') {
       list = list.filter(
-        r => (r.status === 'pending' || r.status === 'validated') && !r.assigned_to,
+        r =>
+          (r.status === 'pending' || r.status === 'validated' || r.status === 'assigned') &&
+          !r.assigned_to,
       );
     } else if (chip === 'mine') {
       list = list.filter(r => r.assigned_to === uid);
     } else if (chip === 'busy') {
       list = list.filter(
-        r => r.assigned_to && r.assigned_to !== uid && (r.status === 'analyzing' || r.status === 'assigned'),
+        r => !!r.assigned_to && r.assigned_to !== uid && r.status !== 'completed',
       );
     }
     const q = search.trim().toLowerCase();
@@ -165,7 +183,7 @@ export default function CardiologueQueueScreen() {
                           {item.patient_name}
                           {isUrgent ? ' ⚡' : ''}
                         </Text>
-                        <StatusBadge status={item.status} />
+                        <StatusBadge item={item} />
                       </View>
                       <Text className="text-xs text-gray-500 dark:text-zinc-400 mb-1">{item.reference}</Text>
                       {item.clinical_context ? (

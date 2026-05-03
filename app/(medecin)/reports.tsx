@@ -10,6 +10,8 @@ import {
   Modal,
   Pressable,
   Platform,
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -152,13 +154,24 @@ export default function ReportsScreen() {
   });
 
   const {
-    reports, unreadCount, urgentUnreadCount, loading,
-    refetch, markRead, markAllRead,
+    reports, total, unreadCount, urgentUnreadCount, loading, loadingMore, hasMore,
+    refetch, loadMore, markRead, markAllRead,
   } = useReportList({
     referring_doctor_id: user?.id,
-    limit: 200,
     enabled: !!user?.id,
   });
+
+  const onListScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (!hasMore || loading || loadingMore) return;
+      const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+      if (contentSize.height <= 0) return;
+      if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 180) {
+        loadMore();
+      }
+    },
+    [hasMore, loading, loadingMore, loadMore],
+  );
 
   const closePdfModal = useCallback(() => {
     setPdfModal({ visible: false, localUri: null, report: null });
@@ -220,7 +233,7 @@ export default function ReportsScreen() {
   }, [unreadCount, markAllRead]);
 
   const FILTERS: { key: typeof filter; label: string }[] = [
-    { key: 'all', label: `Tous (${reports.length})` },
+    { key: 'all', label: `Tous (${total})` },
     { key: 'unread', label: `Non lus${unreadCount > 0 ? ` (${unreadCount})` : ''}` },
     { key: 'urgent', label: `Urgents${urgentUnreadCount > 0 ? ` 🔴` : ''}` },
   ];
@@ -306,6 +319,8 @@ export default function ReportsScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4f46e5" />}
           contentContainerStyle={{ paddingBottom: 30 }}
+          scrollEventThrottle={400}
+          onScroll={onListScroll}
         >
           {filtered.length === 0 ? (
             <View className="items-center mt-16">
@@ -319,15 +334,22 @@ export default function ReportsScreen() {
               </Text>
             </View>
           ) : (
-            filtered.map(r => (
-              <ReportCard
-                key={r.id}
-                report={r}
-                onRead={markRead}
-                onOpenPdfSheet={handleOpenPdfSheet}
-                pdfOpening={pdfLoading === r.id}
-              />
-            ))
+            <>
+              {filtered.map(r => (
+                <ReportCard
+                  key={r.id}
+                  report={r}
+                  onRead={markRead}
+                  onOpenPdfSheet={handleOpenPdfSheet}
+                  pdfOpening={pdfLoading === r.id}
+                />
+              ))}
+              {loadingMore ? (
+                <View className="py-4 items-center">
+                  <ActivityIndicator color="#4f46e5" />
+                </View>
+              ) : null}
+            </>
           )}
         </ScrollView>
       )}

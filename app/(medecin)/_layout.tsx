@@ -24,6 +24,7 @@ function TabIcon({
 
   return (
     <View
+      accessible={false}
       style={{
         alignItems: 'center',
         justifyContent: 'flex-start',
@@ -73,7 +74,7 @@ function NewEcgIcon({ focused }: { focused: boolean }) {
 
   if (focused) {
     return (
-      <View style={{ alignItems: 'center', paddingTop: 2 }}>
+      <View style={{ alignItems: 'center', paddingTop: 2 }} accessible={false}>
         <LinearGradient
           colors={[...joyful.gradientFab]}
           start={{ x: 0, y: 0 }}
@@ -114,7 +115,7 @@ function NewEcgIcon({ focused }: { focused: boolean }) {
   }
 
   return (
-    <View style={{ alignItems: 'center', paddingTop: 2 }}>
+    <View style={{ alignItems: 'center', paddingTop: 2 }} accessible={false}>
       <LinearGradient
         colors={['#C084FC', '#F472B6']}
         start={{ x: 0, y: 0 }}
@@ -197,6 +198,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Accueil',
+          tabBarAccessibilityLabel: 'Accueil',
           tabBarIcon: ({ focused }) => (
             <TabIcon name="home" label="Accueil" focused={focused} color={joyful.tabHome} />
           ),
@@ -206,6 +208,7 @@ export default function TabLayout() {
         name="requests"
         options={{
           title: 'Demandes',
+          tabBarAccessibilityLabel: 'Mes demandes ECG',
           tabBarIcon: ({ focused }) => (
             <TabIcon name="list" label="Demandes" focused={focused} color={joyful.tabRequests} />
           ),
@@ -215,6 +218,7 @@ export default function TabLayout() {
         name="new-ecg"
         options={{
           title: 'Nouvel ECG',
+          tabBarAccessibilityLabel: 'Créer un nouvel enregistrement ECG',
           tabBarIcon: ({ focused }) => <NewEcgIcon focused={focused} />,
         }}
       />
@@ -222,6 +226,7 @@ export default function TabLayout() {
         name="reports"
         options={{
           title: 'Rapports',
+          tabBarAccessibilityLabel: 'Rapports et comptes rendus',
           tabBarIcon: ({ focused }) => (
             <TabIcon name="document-text" label="Rapports" focused={focused} color={joyful.tabReports} />
           ),
@@ -231,6 +236,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profil',
+          tabBarAccessibilityLabel: 'Mon profil et paramètres',
           tabBarIcon: ({ focused }) => (
             <TabIcon name="person" label="Profil" focused={focused} color={joyful.tabProfile} />
           ),

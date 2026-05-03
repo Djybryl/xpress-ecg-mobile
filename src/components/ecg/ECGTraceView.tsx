@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ECGTraceView — composant principal d'affichage du tracé ECG mobile.
  * Gère automatiquement le mode image (JPEG/PNG) ou signal (DICOM/SCP/WFDB parsé).
  * Bandeau de mesures, plein écran immersif (toolbar auto-masquée), calibre sur DII.

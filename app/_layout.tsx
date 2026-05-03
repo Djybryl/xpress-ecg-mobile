@@ -33,6 +33,8 @@ export default function RootLayout() {
                   headerShown: false,
                   animation: 'slide_from_right',
                   animationDuration: 220,
+                  // A11y : titre annoncé par VoiceOver / TalkBack même sans en-tête visible
+                  title: 'Xpress-ECG',
                 }}
               />
             </ToastProvider>

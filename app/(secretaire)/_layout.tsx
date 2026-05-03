@@ -17,7 +17,7 @@ function TabIcon({
   const iconColor = focused ? joyful.tabFocused : color;
   const labelColor = focused ? joyful.tabFocused : color;
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'flex-start', paddingTop: 4, paddingHorizontal: 2, minWidth: 56, maxWidth: 76 }}>
+    <View accessible={false} style={{ alignItems: 'center', justifyContent: 'flex-start', paddingTop: 4, paddingHorizontal: 2, minWidth: 56, maxWidth: 76 }}>
       <View style={{ width: 36, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: focused ? joyful.primaryMuted : 'transparent' }}>
         <Ionicons name={name} size={20} color={iconColor} />
       </View>
@@ -63,20 +63,21 @@ export default function SecretaireTabLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: 'Accueil', tabBarIcon: ({ focused }) => <TabIcon name="home" label="Accueil" focused={focused} color={joyful.tabHome} /> }}
+        options={{ title: 'Accueil', tabBarAccessibilityLabel: 'Accueil secrétaire', tabBarIcon: ({ focused }) => <TabIcon name="home" label="Accueil" focused={focused} color={joyful.tabHome} /> }}
       />
       <Tabs.Screen
         name="ecg-queue"
-        options={{ title: 'File ECG', tabBarIcon: ({ focused }) => <TabIcon name="list" label="File ECG" focused={focused} color={joyful.tabRequests} /> }}
+        options={{ title: 'File ECG', tabBarAccessibilityLabel: 'File des demandes ECG', tabBarIcon: ({ focused }) => <TabIcon name="list" label="File ECG" focused={focused} color={joyful.tabRequests} /> }}
       />
       <Tabs.Screen
         name="prescribers"
-        options={{ title: 'Dossiers', tabBarIcon: ({ focused }) => <TabIcon name="people" label="Dossiers" focused={focused} color={joyful.tabReports} /> }}
+        options={{ title: 'Dossiers', tabBarAccessibilityLabel: 'Dossiers prescripteurs', tabBarIcon: ({ focused }) => <TabIcon name="people" label="Dossiers" focused={focused} color={joyful.tabReports} /> }}
       />
       <Tabs.Screen
         name="subscriptions"
         options={{
           title: 'Quota',
+          tabBarAccessibilityLabel: 'Abonnements et quotas',
           tabBarIcon: ({ focused }) => (
             <TabIcon name="pie-chart" label="Quota" focused={focused} color={joyful.tabReports} />
           ),
@@ -84,7 +85,7 @@ export default function SecretaireTabLayout() {
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: 'Profil', tabBarIcon: ({ focused }) => <TabIcon name="person" label="Profil" focused={focused} color={joyful.tabProfile} /> }}
+        options={{ title: 'Profil', tabBarAccessibilityLabel: 'Mon profil', tabBarIcon: ({ focused }) => <TabIcon name="person" label="Profil" focused={focused} color={joyful.tabProfile} /> }}
       />
     </Tabs>
   );

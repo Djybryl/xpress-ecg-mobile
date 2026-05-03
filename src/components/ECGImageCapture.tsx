@@ -244,13 +244,10 @@ export default function ECGImageCapture({
         { compress: JPEG_QUALITY, format: ImageManipulator.SaveFormat.JPEG },
       );
 
-      const quality = await assessImageQuality(manip.uri);
-
-      await Haptics.notificationAsync(
-        quality === 'poor'
-          ? Haptics.NotificationFeedbackType.Warning
-          : Haptics.NotificationFeedbackType.Success,
-      );
+      const [quality] = await Promise.all([
+        assessImageQuality(manip.uri),
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),
+      ]);
 
       const page: ECGCaptureResult = {
         uri: manip.uri,
@@ -277,13 +274,10 @@ export default function ECGImageCapture({
       const result = await pickAndCorrect();
       if (!result) return;
 
-      const quality = await assessImageQuality(result.uri);
-
-      await Haptics.notificationAsync(
-        quality === 'poor'
-          ? Haptics.NotificationFeedbackType.Warning
-          : Haptics.NotificationFeedbackType.Success,
-      );
+      const [quality] = await Promise.all([
+        assessImageQuality(result.uri),
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),
+      ]);
 
       const page: ECGCaptureResult = {
         ...result,

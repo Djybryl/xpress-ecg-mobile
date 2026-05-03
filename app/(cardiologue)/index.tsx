@@ -63,9 +63,12 @@ export default function CardiologueHome() {
   const { unreadCount: notifCount, refetch: refetchNotifs } = useNotifications(!!user?.id);
 
   const mineToStart = useMemo(
-    () => records.filter(
-      r => r.assigned_to === user?.id && (r.status === 'assigned' || r.status === 'analyzing'),
-    ),
+    () =>
+      records.filter(
+        r =>
+          r.assigned_to === user?.id &&
+          (r.status === 'pending' || r.status === 'validated' || r.status === 'assigned' || r.status === 'analyzing'),
+      ),
     [records, user?.id],
   );
 

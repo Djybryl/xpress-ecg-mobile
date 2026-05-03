@@ -115,7 +115,7 @@ export default function ProfileScreen() {
   const [economyLoading, setEconomyLoading] = useState(false);
 
   const { records } = useEcgList({ referring_doctor_id: user?.id, limit: 200, enabled: !!user?.id });
-  const { reports } = useReportList({ referring_doctor_id: user?.id, limit: 200, enabled: !!user?.id });
+  const { reports } = useReportList({ referring_doctor_id: user?.id, limit: 100, enabled: !!user?.id });
 
   const loadEconomy = useCallback(async () => {
     if (economy || economyLoading) return;

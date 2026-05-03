@@ -11,6 +11,7 @@ export interface EcgRecordItem {
   gender: 'M' | 'F' | null;
   referring_doctor_id: string | null;
   assigned_to: string | null;
+  /** pending (+ assigned_to) → analyzing → completed ; validated/assigned = enum legacy */
   status: 'pending' | 'assigned' | 'analyzing' | 'completed' | 'validated';
   urgency: 'normal' | 'urgent';
   clinical_context: string | null;

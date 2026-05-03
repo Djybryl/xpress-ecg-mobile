@@ -26,6 +26,7 @@ function TabIcon({
 
   return (
     <View
+      accessible={false}
       style={{
         alignItems: 'center',
         justifyContent: 'flex-start',
@@ -135,6 +136,7 @@ export default function CardiologueTabLayout() {
         name="index"
         options={{
           title: 'Accueil',
+          tabBarAccessibilityLabel: 'Accueil cardiologue',
           tabBarIcon: ({ focused }) => (
             <TabIcon name="pulse" label="Accueil" focused={focused} color={joyful.tabHome} />
           ),
@@ -144,6 +146,8 @@ export default function CardiologueTabLayout() {
         name="queue"
         options={{
           title: 'File ECG',
+          tabBarAccessibilityLabel:
+            queueBadge > 0 ? `File ECG, ${queueBadge} éléments en cours` : 'File ECG',
           tabBarIcon: ({ focused }) => (
             <TabIcon name="layers" label="File ECG" focused={focused} color={joyful.tabRequests} badge={queueBadge} />
           ),
@@ -153,6 +157,7 @@ export default function CardiologueTabLayout() {
         name="commissions"
         options={{
           title: 'Ratios',
+          tabBarAccessibilityLabel: 'Ratios et commissions',
           tabBarIcon: ({ focused }) => (
             <TabIcon name="analytics" label="Ratios" focused={focused} color={joyful.tabReports} />
           ),
@@ -162,6 +167,7 @@ export default function CardiologueTabLayout() {
         name="history"
         options={{
           title: 'Historique',
+          tabBarAccessibilityLabel: 'Historique des interprétations',
           tabBarIcon: ({ focused }) => (
             <TabIcon name="time" label="Historique" focused={focused} color={joyful.tabReports} />
           ),
@@ -171,6 +177,10 @@ export default function CardiologueTabLayout() {
         name="second-opinions"
         options={{
           title: 'Second avis',
+          tabBarAccessibilityLabel:
+            secondOpinionBadge > 0
+              ? `Second avis, ${secondOpinionBadge} demande${secondOpinionBadge > 1 ? 's' : ''} en attente`
+              : 'Second avis',
           tabBarIcon: ({ focused }) => (
             <TabIcon name="people" label="2e avis" focused={focused} color={joyful.tabRequests} badge={secondOpinionBadge} />
           ),
@@ -180,6 +190,7 @@ export default function CardiologueTabLayout() {
         name="profile"
         options={{
           title: 'Profil',
+          tabBarAccessibilityLabel: 'Mon profil',
           tabBarIcon: ({ focused }) => (
             <TabIcon name="person" label="Profil" focused={focused} color={joyful.tabProfile} />
           ),

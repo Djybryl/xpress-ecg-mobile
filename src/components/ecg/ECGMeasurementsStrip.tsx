@@ -2,7 +2,7 @@
  * Bandeau compact des mesures automatiques (FC, intervalles) au-dessus du tracé.
  */
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import type { EcgMeasurementsDisplay } from '@/lib/ecgMeasurementDisplay';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -47,9 +47,7 @@ export function ECGMeasurementsStrip({ measurements: m }: ECGMeasurementsStripPr
   if (items.length === 0) return null;
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
+    <View
       style={[
         styles.row,
         {
@@ -57,34 +55,37 @@ export function ECGMeasurementsStrip({ measurements: m }: ECGMeasurementsStripPr
           backgroundColor: colors.neutral.inputBg,
         },
       ]}
-      contentContainerStyle={styles.content}
     >
-      {items.map(({ label, value }) => (
-        <Chip
-          key={label}
-          label={label}
-          value={value}
-          borderColor={colors.neutral.border}
-          bg={colors.semantic.cardBg}
-          labelColor={colors.neutral.textMuted}
-          valueColor={colors.neutral.text}
-        />
-      ))}
-    </ScrollView>
+      <View style={styles.content}>
+        {items.map(({ label, value }) => (
+          <Chip
+            key={label}
+            label={label}
+            value={value}
+            borderColor={colors.neutral.border}
+            bg={colors.semantic.cardBg}
+            labelColor={colors.neutral.textMuted}
+            valueColor={colors.neutral.text}
+          />
+        ))}
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   row: {
-    maxHeight: 36,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   content: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    gap: 8,
+    flexWrap: 'wrap',
+    gap: 6,
   },
   chip: {
     paddingHorizontal: 8,

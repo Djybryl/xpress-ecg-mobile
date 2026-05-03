@@ -17,7 +17,7 @@ function TabIcon({
   const iconColor = focused ? joyful.tabFocused : color;
   const labelColor = focused ? joyful.tabFocused : color;
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'flex-start', paddingTop: 4, paddingHorizontal: 2, minWidth: 56, maxWidth: 76 }}>
+    <View accessible={false} style={{ alignItems: 'center', justifyContent: 'flex-start', paddingTop: 4, paddingHorizontal: 2, minWidth: 56, maxWidth: 76 }}>
       <View style={{ width: 36, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: focused ? joyful.primaryMuted : 'transparent' }}>
         <Ionicons name={name} size={20} color={iconColor} />
       </View>
@@ -63,23 +63,23 @@ export default function AdminTabLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: 'Tableau de bord', tabBarIcon: ({ focused }) => <TabIcon name="stats-chart" label="Dashboard" focused={focused} color={joyful.tabHome} /> }}
+        options={{ title: 'Tableau de bord', tabBarAccessibilityLabel: 'Tableau de bord administrateur', tabBarIcon: ({ focused }) => <TabIcon name="stats-chart" label="Dashboard" focused={focused} color={joyful.tabHome} /> }}
       />
       <Tabs.Screen
         name="users"
-        options={{ title: 'Utilisateurs', tabBarIcon: ({ focused }) => <TabIcon name="people" label="Utilisateurs" focused={focused} color={joyful.tabRequests} /> }}
+        options={{ title: 'Utilisateurs', tabBarAccessibilityLabel: 'Gestion des utilisateurs', tabBarIcon: ({ focused }) => <TabIcon name="people" label="Utilisateurs" focused={focused} color={joyful.tabRequests} /> }}
       />
       <Tabs.Screen
         name="prescribers"
-        options={{ title: 'Dossiers', tabBarIcon: ({ focused }) => <TabIcon name="document-text" label="Dossiers" focused={focused} color={joyful.tabReports} /> }}
+        options={{ title: 'Dossiers', tabBarAccessibilityLabel: 'Dossiers et prescripteurs', tabBarIcon: ({ focused }) => <TabIcon name="document-text" label="Dossiers" focused={focused} color={joyful.tabReports} /> }}
       />
       <Tabs.Screen
         name="settings"
-        options={{ title: 'Paramètres', tabBarIcon: ({ focused }) => <TabIcon name="settings" label="Paramètres" focused={focused} color="#64748b" /> }}
+        options={{ title: 'Paramètres', tabBarAccessibilityLabel: 'Paramètres de la plateforme', tabBarIcon: ({ focused }) => <TabIcon name="settings" label="Paramètres" focused={focused} color="#64748b" /> }}
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: 'Profil', tabBarIcon: ({ focused }) => <TabIcon name="person" label="Profil" focused={focused} color={joyful.tabProfile} /> }}
+        options={{ title: 'Profil', tabBarAccessibilityLabel: 'Mon profil', tabBarIcon: ({ focused }) => <TabIcon name="person" label="Profil" focused={focused} color={joyful.tabProfile} /> }}
       />
     </Tabs>
   );

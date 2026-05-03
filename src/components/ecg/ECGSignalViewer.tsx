@@ -7,7 +7,7 @@
  * En plein écran, pxPerMmOverride est calculé par ECGTraceView pour que le tracé
  * remplisse exactement la hauteur disponible (pas de transform-scale, pas de zone vide).
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import Svg, { Path, G } from 'react-native-svg';
 import Animated, {
@@ -21,6 +21,7 @@ import {
   type DisplayMode,
   type EcgFilterOptions,
   buildPathCache,
+  enrichSignalWithDerivedLeads,
   getNumCols,
   getNumRows,
   LEAD_ORDER_4X3,
@@ -70,24 +71,11 @@ function calibration1mVPath(cellHeight: number, pxPerMm: number, amplitudeMmPerM
   return `M ${x0},${cy} L ${x0},${cy - ampPx} L ${x0 + w},${cy - ampPx} L ${x0 + w},${cy}`;
 }
 
-// ── Grille calibrée (1 mm petit carreau, 5 mm grand carreau) ────────────────
-
-const CalibratedGrid = React.memo(function CalibratedGrid({
-  width,
-  height,
-  pxPerMm,
-  c,
-}: {
-  width: number;
-  height: number;
-  pxPerMm: number;
-  c: EcgColors;
-}) {
+function buildGridPaths(width: number, height: number, pxPerMm: number): { minorGridD: string; majorGridD: string } {
   const small = pxPerMm;
   const large = 5 * pxPerMm;
   let minorD = '';
   let majorD = '';
-
   for (let x = 0; x <= width; x += small) {
     if (Math.abs(x % large) < 0.1) majorD += `M${x},0V${height}`;
     else minorD += `M${x},0V${height}`;
@@ -96,7 +84,22 @@ const CalibratedGrid = React.memo(function CalibratedGrid({
     if (Math.abs(y % large) < 0.1) majorD += `M0,${y}H${width}`;
     else minorD += `M0,${y}H${width}`;
   }
+  return { minorGridD: minorD, majorGridD: majorD };
+}
 
+const CalibratedGrid = React.memo(function CalibratedGrid({
+  minorD,
+  majorD,
+  width,
+  height,
+  c,
+}: {
+  minorD: string;
+  majorD: string;
+  width: number;
+  height: number;
+  c: EcgColors;
+}) {
   return (
     <G>
       {minorD ? <Path d={minorD} stroke={c.gridMinor} strokeWidth={0.4} fill="none" /> : null}
@@ -111,9 +114,11 @@ const LeadCell = React.memo(function LeadCell({
   cellWidth,
   cellHeight,
   gridVisible,
-  pxPerMm,
+  minorGridD,
+  majorGridD,
   amplitude,
   showCalibrationPulse,
+  pxPerMm,
   c,
 }: {
   lead: string;
@@ -121,9 +126,11 @@ const LeadCell = React.memo(function LeadCell({
   cellWidth: number;
   cellHeight: number;
   gridVisible: boolean;
-  pxPerMm: number;
+  minorGridD: string;
+  majorGridD: string;
   amplitude: number;
   showCalibrationPulse: boolean;
+  pxPerMm: number;
   c: EcgColors;
 }) {
   const calibD = showCalibrationPulse ? calibration1mVPath(cellHeight, pxPerMm, amplitude) : '';
@@ -132,7 +139,13 @@ const LeadCell = React.memo(function LeadCell({
       <Text style={[styles.leadLabel, { color: c.label }]}>{lead}</Text>
       <Svg width={cellWidth} height={cellHeight}>
         {gridVisible && (
-          <CalibratedGrid width={cellWidth} height={cellHeight} pxPerMm={pxPerMm} c={c} />
+          <CalibratedGrid
+            minorD={minorGridD}
+            majorD={majorGridD}
+            width={cellWidth}
+            height={cellHeight}
+            c={c}
+          />
         )}
         {calibD ? (
           <Path
@@ -205,12 +218,33 @@ export function ECGSignalViewer({
   const cellHeight = ROW_HEIGHT_MM * pxPerMm;
   const contentWidth = totalTraceWidth + LABEL_W * numCols;
 
-  const pathCache = useMemo(
-    () => buildPathCache(signal, displayMode, amplitude, cellWidth, cellHeight, filterOpts, pxPerMm),
-    [signal, displayMode, amplitude, cellWidth, cellHeight, filterOpts, pxPerMm],
+  const { minorGridD: leadMinorGridD, majorGridD: leadMajorGridD } = useMemo(
+    () => buildGridPaths(cellWidth, cellHeight, pxPerMm),
+    [pxPerMm, cellWidth, cellHeight],
+  );
+  const { minorGridD: wideMinorGridD, majorGridD: wideMajorGridD } = useMemo(
+    () => buildGridPaths(totalTraceWidth, cellHeight, pxPerMm),
+    [pxPerMm, totalTraceWidth, cellHeight],
   );
 
-  const enrichedHasII = !!pathCache['II_long'];
+  const [pathCache, setPathCache] = useState<Record<string, string>>({});
+  const [pathsReady, setPathsReady] = useState(false);
+  const filterKey = `${filterOpts.lowPass40}_${filterOpts.highPass005}_${filterOpts.notch50 ?? false}_${filterOpts.smoothLevel ?? 0}`;
+  const sigFingerprint = `${signal.format}_${signal.sample_rate}_${signal.duration_seconds}_${signal.leads.join(',')}_${String(signal.samples.II?.length ?? signal.samples.I?.length ?? 0)}`;
+  const buildKey = `${sigFingerprint}_${displayMode}_${amplitude}_${speed}_${pxPerMm}_${cellWidth.toFixed(4)}_${cellHeight.toFixed(4)}_${filterKey}`;
+
+  useEffect(() => {
+    setPathsReady(false);
+    const tid = setTimeout(() => {
+      const cache = buildPathCache(signal, displayMode, amplitude, cellWidth, cellHeight, filterOpts, pxPerMm);
+      setPathCache(cache);
+      setPathsReady(true);
+    }, 0);
+    return () => clearTimeout(tid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- buildKey regroupe les entrées du cache
+  }, [buildKey]);
+
+  const enrichedHasII = !!enrichSignalWithDerivedLeads(signal).samples.II?.length;
   const caliperExtra = caliperEnabled && enrichedHasII ? 26 : 0;
   const contentHeight =
     numRows * cellHeight + (enrichedHasII ? cellHeight + 8 + caliperExtra : 0) + 8;
@@ -258,7 +292,8 @@ export function ECGSignalViewer({
 
   const pan = Gesture.Pan()
     .enabled(!caliperEnabled)
-    .minDistance(1)
+    .minDistance(4)
+    .averageTouches(true)
     .onUpdate(e => {
       translateX.value = savedTX.value + e.translationX;
       translateY.value = savedTY.value + e.translationY;
@@ -274,12 +309,17 @@ export function ECGSignalViewer({
        */
       const scaledW = cw * s;
       const scaledH = ch * s;
-      const minTx = scaledW > vw ? -(scaledW - vw) : 0;
-      const maxTx = 0;
+      const OVERSCROLL = 20;
+      const minTx = scaledW > vw ? -(scaledW - vw) - OVERSCROLL : -OVERSCROLL;
+      const maxTx = OVERSCROLL;
+      const naturalMinTx = scaledW > vw ? -(scaledW - vw) : 0;
+      const naturalMaxTx = 0;
+      let x = translateX.value;
+      x = Math.max(minTx, Math.min(maxTx, x));
+      const clampedX = Math.max(naturalMinTx, Math.min(naturalMaxTx, x));
       const minTy = scaledH > vh ? -(scaledH - vh) / 2 : 0;
       const maxTy = scaledH > vh ? (scaledH - vh) / 2 : 0;
 
-      const clampedX = Math.max(minTx, Math.min(maxTx, translateX.value));
       const clampedY = Math.max(minTy, Math.min(maxTy, translateY.value));
       translateX.value = withTiming(clampedX);
       translateY.value = withTiming(clampedY);
@@ -289,6 +329,7 @@ export function ECGSignalViewer({
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
+    .maxDuration(300)
     .onStart(() => {
       scaleVal.value = withTiming(1);
       translateX.value = withTiming(0);
@@ -300,15 +341,17 @@ export function ECGSignalViewer({
 
   const singleTap = Gesture.Tap()
     .numberOfTaps(1)
+    .maxDuration(250)
+    .requireExternalGestureToFail(doubleTap)
     .runOnJS(true)
     .onEnd(() => {
       if (onSingleTap) onSingleTap();
     });
 
-  const tapGesture = Gesture.Exclusive(doubleTap, singleTap);
   const gesture = Gesture.Simultaneous(
     Gesture.Simultaneous(pinch, pan),
-    tapGesture,
+    doubleTap,
+    singleTap,
   );
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -325,12 +368,11 @@ export function ECGSignalViewer({
 
   const renderGrid = () => {
     const cellProps = {
-      cellWidth,
       cellHeight,
       gridVisible,
-      pxPerMm,
       amplitude,
       showCalibrationPulse,
+      pxPerMm,
       c,
     };
 
@@ -341,7 +383,10 @@ export function ECGSignalViewer({
             <LeadCell
               key={`${lead}_${colIdx}`}
               lead={lead}
-              pathD={pathCache[`${lead}_${colIdx}`]}
+              pathD={pathsReady ? pathCache[`${lead}_${colIdx}`] : undefined}
+              cellWidth={cellWidth}
+              minorGridD={leadMinorGridD}
+              majorGridD={leadMajorGridD}
               {...cellProps}
             />
           ))}
@@ -352,8 +397,22 @@ export function ECGSignalViewer({
     if (displayMode === '6x2') {
       return LEAD_ORDER_6X2.map(([left, right], rowIdx) => (
         <View key={rowIdx} style={styles.gridRow}>
-          <LeadCell lead={left} pathD={pathCache[`${left}_0`]} {...cellProps} />
-          <LeadCell lead={right} pathD={pathCache[`${right}_1`]} {...cellProps} />
+          <LeadCell
+            lead={left}
+            pathD={pathsReady ? pathCache[`${left}_0`] : undefined}
+            cellWidth={cellWidth}
+            minorGridD={leadMinorGridD}
+            majorGridD={leadMajorGridD}
+            {...cellProps}
+          />
+          <LeadCell
+            lead={right}
+            pathD={pathsReady ? pathCache[`${right}_1`] : undefined}
+            cellWidth={cellWidth}
+            minorGridD={leadMinorGridD}
+            majorGridD={leadMajorGridD}
+            {...cellProps}
+          />
         </View>
       ));
     }
@@ -362,20 +421,18 @@ export function ECGSignalViewer({
       <View key={idx} style={styles.gridRow}>
         <LeadCell
           lead={lead}
-          pathD={pathCache[`${lead}_0`]}
+          pathD={pathsReady ? pathCache[`${lead}_0`] : undefined}
           cellWidth={totalTraceWidth}
-          cellHeight={cellHeight}
-          gridVisible={gridVisible}
-          pxPerMm={pxPerMm}
-          amplitude={amplitude}
-          showCalibrationPulse={showCalibrationPulse}
-          c={c}
+          minorGridD={wideMinorGridD}
+          majorGridD={wideMajorGridD}
+          {...cellProps}
         />
       </View>
     ));
   };
 
   const bgColor = c.bg;
+  const iiLongD = pathsReady ? pathCache['II_long'] : undefined;
 
   return (
     <GestureDetector gesture={gesture}>
@@ -402,9 +459,10 @@ export function ECGSignalViewer({
                 <Svg width={totalTraceWidth} height={cellHeight}>
                   {gridVisible && (
                     <CalibratedGrid
+                      minorD={wideMinorGridD}
+                      majorD={wideMajorGridD}
                       width={totalTraceWidth}
                       height={cellHeight}
-                      pxPerMm={pxPerMm}
                       c={c}
                     />
                   )}
@@ -418,14 +476,24 @@ export function ECGSignalViewer({
                       strokeLinejoin="miter"
                     />
                   ) : null}
-                  <Path
-                    d={pathCache['II_long'] ?? ''}
-                    fill="none"
-                    stroke={c.trace}
-                    strokeWidth={1.4}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  {iiLongD ? (
+                    <Path
+                      d={iiLongD}
+                      fill="none"
+                      stroke={c.trace}
+                      strokeWidth={1.4}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  ) : (
+                    <Path
+                      d={`M0,${cellHeight / 2}H${totalTraceWidth}`}
+                      fill="none"
+                      stroke={c.gridMinor}
+                      strokeWidth={0.5}
+                      strokeDasharray="4,2"
+                    />
+                  )}
                 </Svg>
                 {caliperEnabled && (
                   <View
