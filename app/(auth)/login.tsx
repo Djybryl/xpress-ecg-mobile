@@ -61,12 +61,10 @@ export default function LoginScreen() {
     <KeyboardAvoidingView
       className="flex-1 bg-indigo-700 dark:bg-indigo-950"
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      accessibilityRole="none"
     >
       <ScrollView
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
-        accessibilityRole="scroll"
       >
         {/* Zone branding décorative */}
         <View className="items-center pt-20 pb-10 px-8">
@@ -85,7 +83,7 @@ export default function LoginScreen() {
           >
             Xpress ECG
           </Text>
-          <Text className="text-indigo-200 text-base mt-1" accessibilityRole="text">
+          <Text className="text-indigo-200 text-base mt-1">
             Espace professionnel
           </Text>
         </View>
@@ -93,7 +91,6 @@ export default function LoginScreen() {
         {/* Formulaire */}
         <View
           className="flex-1 bg-white dark:bg-zinc-900 rounded-t-3xl px-6 pt-8 pb-10"
-          accessibilityRole="none"
         >
           <Text
             accessibilityRole="header"
@@ -110,7 +107,7 @@ export default function LoginScreen() {
 
           {/* Email */}
           <View className="mb-4">
-            <Text accessibilityRole="text" className="text-gray-600 dark:text-zinc-300 text-sm font-medium mb-1.5">
+            <Text className="text-gray-600 dark:text-zinc-300 text-sm font-medium mb-1.5">
               Adresse email
             </Text>
             <TextInput
@@ -132,7 +129,7 @@ export default function LoginScreen() {
 
           {/* Mot de passe */}
           <View className="mb-6">
-            <Text accessibilityRole="text" className="text-gray-600 dark:text-zinc-300 text-sm font-medium mb-1.5">
+            <Text className="text-gray-600 dark:text-zinc-300 text-sm font-medium mb-1.5">
               Mot de passe
             </Text>
             <View className="flex-row border border-gray-200 dark:border-zinc-600 rounded-xl bg-gray-50 dark:bg-zinc-800 overflow-hidden">
