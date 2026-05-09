@@ -1,21 +1,23 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  RefreshControl, TextInput, ActivityIndicator,
+  RefreshControl, TextInput, ActivityIndicator, Alert,
 } from 'react-native';
-import { router, type Href } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/providers/AuthProvider';
 import { useCardiologistQueue } from '@/hooks/useCardiologistQueue';
-import { ECGTraceView } from '@/components/ecg/ECGTraceView';
+import { api, getApiErrorMessage } from '@/lib/apiClient';
+import { useTranslation } from '@/i18n';
 import type { EcgRecordItem } from '@/hooks/useEcgList';
 
 const FILTER_CHIPS: { key: string; label: string }[] = [
   { key: 'all', label: 'Tous' },
   { key: 'pool', label: 'À prendre' },
-  { key: 'mine', label: 'Mes dossiers' },
-  { key: 'busy', label: 'Collègues' },
+  { key: 'urgent', label: '⚡ Urgents' },
+  { key: 'busy', label: 'En cours' },
 ];
 
 function timeAgo(dateStr: string): string {
@@ -66,28 +68,55 @@ export default function CardiologueQueueScreen() {
   const { user } = useAuth();
   const { colors: joyful } = useTheme();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
+  const { filter } = useLocalSearchParams<{ filter?: string }>();
+  const [activeFilter, setActiveFilter] = useState(() => (filter === 'urgent' ? 'urgent' : 'all'));
   const [search, setSearch] = useState('');
-  const [chip, setChip] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
-  const [expandedTrace, setExpandedTrace] = useState<string | null>(null);
+  const [takingId, setTakingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (filter === 'urgent') setActiveFilter('urgent');
+  }, [filter]);
 
   const { records, loading, refetch } = useCardiologistQueue(user?.id, 150);
 
+  // Règle métier (cf. web PendingECG) : 1 seul ECG en cours par cardiologue.
+  const myInProgressId = useMemo(
+    () => records.find(r => r.status === 'analyzing' && r.assigned_to === user?.id)?.id ?? null,
+    [records, user?.id],
+  );
+
+  const handleTake = useCallback(async (item: EcgRecordItem) => {
+    if (!user?.id) return;
+    if (myInProgressId && myInProgressId !== item.id) {
+      Alert.alert(t.queue.oneAtATimeTitle, t.queue.oneAtATime);
+      return;
+    }
+    setTakingId(item.id);
+    try {
+      await api.post(`/ecg-records/${item.id}/start-analysis`);
+      await refetch();
+      router.push(`/(cardiologue)/interpret/${item.id}` as Href);
+    } catch (e) {
+      Alert.alert(t.common.error, getApiErrorMessage(e));
+    } finally {
+      setTakingId(null);
+    }
+  }, [user?.id, myInProgressId, refetch, t.queue.oneAtATimeTitle, t.queue.oneAtATime, t.common.error]);
+
+  const handleContinue = useCallback((id: string) => {
+    router.push(`/(cardiologue)/interpret/${id}` as Href);
+  }, []);
+
   const filtered = useMemo(() => {
     let list = records;
-    const uid = user?.id;
-    if (chip === 'pool') {
-      list = list.filter(
-        r =>
-          (r.status === 'pending' || r.status === 'validated' || r.status === 'assigned') &&
-          !r.assigned_to,
-      );
-    } else if (chip === 'mine') {
-      list = list.filter(r => r.assigned_to === uid);
-    } else if (chip === 'busy') {
-      list = list.filter(
-        r => !!r.assigned_to && r.assigned_to !== uid && r.status !== 'completed',
-      );
+    if (activeFilter === 'pool') {
+      list = list.filter(r => r.status === 'pending' && !r.assigned_to);
+    } else if (activeFilter === 'urgent') {
+      list = list.filter(r => r.urgency === 'urgent' && r.status !== 'completed');
+    } else if (activeFilter === 'busy') {
+      list = list.filter(r => r.status === 'analyzing');
     }
     const q = search.trim().toLowerCase();
     if (q) {
@@ -99,7 +128,7 @@ export default function CardiologueQueueScreen() {
       );
     }
     return list;
-  }, [records, chip, search, user?.id]);
+  }, [records, activeFilter, search]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -125,14 +154,14 @@ export default function CardiologueQueueScreen() {
           {FILTER_CHIPS.map(c => (
             <TouchableOpacity
               key={c.key}
-              onPress={() => setChip(c.key)}
+              onPress={() => setActiveFilter(c.key)}
               className={`px-3 py-1.5 rounded-full mr-2 ${
-                chip === c.key
+                activeFilter === c.key
                   ? 'bg-violet-600'
                   : 'bg-gray-100 dark:bg-zinc-800'
               }`}
             >
-              <Text className={`text-xs font-semibold ${chip === c.key ? 'text-white' : 'text-gray-700 dark:text-zinc-300'}`}>
+              <Text className={`text-xs font-semibold ${activeFilter === c.key ? 'text-white' : 'text-gray-700 dark:text-zinc-300'}`}>
                 {c.label}
               </Text>
             </TouchableOpacity>
@@ -158,19 +187,92 @@ export default function CardiologueQueueScreen() {
         ) : (
           filtered.map(item => {
             const isUrgent = item.urgency === 'urgent';
-            const other = item.assigned_to && item.assigned_to !== user?.id;
+            const other = !!item.assigned_to && item.assigned_to !== user?.id && item.status !== 'completed';
+            const isMine = item.status === 'analyzing' && item.assigned_to === user?.id;
+            const isCompleted = item.status === 'completed';
+            const isLoadingTake = takingId === item.id;
+            const blockedByOther = !!myInProgressId && myInProgressId !== item.id && !isMine && !other && !isCompleted;
+
+            const renderAction = () => {
+              if (isCompleted) {
+                return (
+                  <View className="px-3 py-1.5 rounded-full bg-green-100 dark:bg-green-900/30">
+                    <Text className="text-[11px] font-semibold text-green-700 dark:text-green-300">
+                      {t.queue.completedShort}
+                    </Text>
+                  </View>
+                );
+              }
+              if (other) {
+                return (
+                  <View className="px-3 py-1.5 rounded-full bg-gray-100 dark:bg-zinc-800">
+                    <Text className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400">
+                      {t.queue.takenByOther}
+                    </Text>
+                  </View>
+                );
+              }
+              if (isMine) {
+                return (
+                  <TouchableOpacity
+                    onPress={() => handleContinue(item.id)}
+                    className="bg-blue-600 px-3 py-1.5 rounded-full flex-row items-center"
+                    accessibilityRole="button"
+                    accessibilityLabel={t.queue.continueLabel}
+                  >
+                    <Ionicons name="arrow-forward" size={12} color="white" />
+                    <Text className="ml-1 text-[11px] font-semibold text-white">
+                      {t.queue.continueLabel}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }
+              if (blockedByOther) {
+                return (
+                  <TouchableOpacity
+                    onPress={() => Alert.alert(t.queue.oneAtATimeTitle, t.queue.oneAtATime)}
+                    className="bg-gray-100 dark:bg-zinc-800 px-3 py-1.5 rounded-full flex-row items-center"
+                    accessibilityRole="button"
+                    accessibilityLabel={t.queue.take}
+                    accessibilityState={{ disabled: true }}
+                  >
+                    <Ionicons name="play" size={12} color="#9ca3af" />
+                    <Text className="ml-1 text-[11px] font-semibold text-gray-400 dark:text-zinc-500">
+                      {t.queue.take}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }
+              return (
+                <TouchableOpacity
+                  onPress={() => handleTake(item)}
+                  disabled={isLoadingTake}
+                  className={`${isUrgent ? 'bg-red-600' : 'bg-violet-600'} px-3 py-1.5 rounded-full flex-row items-center`}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.queue.take}
+                >
+                  {isLoadingTake ? (
+                    <ActivityIndicator color="white" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="play" size={12} color="white" />
+                      <Text className="ml-1 text-[11px] font-semibold text-white">
+                        {t.queue.take}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              );
+            };
+
             return (
               <View
                 key={item.id}
                 className={`bg-white dark:bg-zinc-900 rounded-2xl mb-3 border overflow-hidden ${
                   isUrgent ? 'border-red-200 dark:border-red-900' : 'border-gray-100 dark:border-zinc-800'
-                } ${other ? 'opacity-80' : ''}`}
+                } ${other ? 'opacity-75' : ''}`}
               >
-                <TouchableOpacity
-                  className="p-4"
-                  activeOpacity={0.8}
-                  onPress={() => router.push(`/(cardiologue)/interpret/${item.id}` as Href)}
-                >
+                <View className="p-4">
                   <View className="flex-row items-start">
                     <View className={`w-10 h-10 rounded-full ${isUrgent ? 'bg-red-100' : 'bg-violet-100'} items-center justify-center mr-3`}>
                       <Text className={`text-xs font-bold ${isUrgent ? 'text-red-600' : 'text-violet-700'}`}>
@@ -187,39 +289,21 @@ export default function CardiologueQueueScreen() {
                       </View>
                       <Text className="text-xs text-gray-500 dark:text-zinc-400 mb-1">{item.reference}</Text>
                       {item.clinical_context ? (
-                        <Text className="text-xs text-gray-500 dark:text-zinc-400 mb-1" numberOfLines={2}>
+                        <Text className="text-xs text-gray-600 dark:text-zinc-300 mb-1" numberOfLines={3}>
                           {item.clinical_context}
                         </Text>
                       ) : null}
                       <Text className="text-xs text-gray-400 dark:text-zinc-500">
                         {item.medical_center} · {timeAgo(item.created_at)}
-                        {other ? ' · autre cardiologue' : ''}
+                        {other ? ` · ${t.queue.otherCardiologist}` : ''}
                       </Text>
                     </View>
                   </View>
-                </TouchableOpacity>
+                </View>
 
-                {/* Bouton aperçu tracé */}
-                <TouchableOpacity
-                  className="flex-row items-center justify-center py-1.5 border-t border-gray-50 dark:border-zinc-800"
-                  onPress={() => setExpandedTrace(prev => prev === item.id ? null : item.id)}
-                  activeOpacity={0.7}
-                >
-                  <Text className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 mr-1">
-                    {expandedTrace === item.id ? 'Masquer le tracé' : 'Aperçu tracé'}
-                  </Text>
-                </TouchableOpacity>
-
-                {expandedTrace === item.id && (
-                  <View className="px-2 pb-2">
-                    <ECGTraceView
-                      ecgId={item.id}
-                      files={(item as EcgRecordItem & { files?: { id: string; filename: string; file_url?: string; file_type: string }[] }).files}
-                      height={150}
-                      compact
-                    />
-                  </View>
-                )}
+                <View className="flex-row items-center justify-end px-3 py-2 border-t border-gray-50 dark:border-zinc-800 bg-gray-50/60 dark:bg-zinc-900/60">
+                  {renderAction()}
+                </View>
               </View>
             );
           })

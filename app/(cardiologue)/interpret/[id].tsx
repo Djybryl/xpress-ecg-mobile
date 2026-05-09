@@ -404,14 +404,34 @@ export default function InterpretEcgScreen() {
         </View>
 
         {/* ─── Tracé ECG ─────────────────────────────────────── */}
-        <View style={{ paddingHorizontal: 8, paddingTop: 8 }}>
-          <ECGTraceView
-            ecgId={id!}
-            files={record.files}
-            height={240}
-            recordHeartRate={record.heart_rate}
-          />
-        </View>
+        {/* Tracé masqué tant que l'ECG n'est pas pris en charge :
+            la décision de prendre se fait depuis la file (cf. queue.tsx)
+            sur la base du contexte clinique et de l'urgence — pas du tracé. */}
+        {(!canStartAnalysis || analysisStarted) ? (
+          <View style={{ paddingHorizontal: 8, paddingTop: 8 }}>
+            <ECGTraceView
+              ecgId={id!}
+              files={record.files}
+              height={240}
+              recordHeartRate={record.heart_rate}
+            />
+          </View>
+        ) : (
+          <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+            <View
+              className="bg-white dark:bg-zinc-900 border border-dashed border-violet-200 dark:border-violet-800 rounded-2xl p-5 items-center"
+              accessibilityLabel={t.interpret.traceLockedTitle}
+            >
+              <Ionicons name="lock-closed-outline" size={26} color={joyful.primary} />
+              <Text className="mt-2 text-gray-800 dark:text-zinc-100 font-semibold text-sm text-center">
+                {t.interpret.traceLockedTitle}
+              </Text>
+              <Text className="mt-1 text-[11px] text-gray-500 dark:text-zinc-400 text-center leading-4">
+                {t.interpret.traceLockedHint}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* ─── Bandeau brouillon restauré ──────────────────────── */}
         {draftRestored && !isReadOnly && (rhythm || conclusion || observations.trim()) && completionPct < 100 && (
