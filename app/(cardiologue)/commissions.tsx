@@ -26,7 +26,15 @@ export default function CommissionsScreen() {
   const { user } = useAuth();
   const { colors: joyful } = useTheme();
   const insets = useSafeAreaInsets();
-  const { data, loading, error, refetch } = useCardiologistRatios(user?.id);
+  const {
+    data,
+    loading,
+    error,
+    refetch,
+    accessibilityLabelLoading,
+    accessibilityLabelError,
+    accessibilityLabelOffline,
+  } = useCardiologistRatios(user?.id);
 
   const latest = data?.latest;
   const history = data?.history ?? [];
@@ -53,24 +61,59 @@ export default function CommissionsScreen() {
         className="flex-1 px-4"
         contentContainerStyle={{ paddingTop: 20, paddingBottom: insets.bottom + 24 }}
       >
-        {loading ? (
+        {loading && !data && (
           <View className="py-20 items-center">
-            <ActivityIndicator color={joyful.primary} size="large" />
+            <ActivityIndicator
+              color={joyful.primary}
+              size="large"
+              accessibilityLabel={accessibilityLabelLoading}
+            />
           </View>
-        ) : error ? (
+        )}
+
+        {error === 'offline' && data && (
+          <View className="mb-4 px-1" accessibilityRole="alert" accessibilityLabel={accessibilityLabelOffline}>
+            <Text className="text-amber-700 dark:text-amber-300 text-sm text-center">
+              Hors ligne — affichage des derniers ratios en cache.
+            </Text>
+          </View>
+        )}
+
+        {error && error !== 'offline' && !data && !loading && (
           <View className="py-16 items-center">
-            <Text className="text-red-500 text-sm mb-4">{error}</Text>
+            <Text
+              className="text-red-500 text-sm mb-4"
+              accessibilityRole="alert"
+              accessibilityLabel={accessibilityLabelError}
+            >
+              {error}
+            </Text>
             <TouchableOpacity onPress={() => void refetch()} className="px-6 py-2.5 bg-violet-600 rounded-xl">
               <Text className="text-white font-semibold text-sm">Réessayer</Text>
             </TouchableOpacity>
           </View>
-        ) : !latest ? (
+        )}
+
+        {error === 'offline' && !data && !loading && (
+          <View className="py-16 items-center" accessibilityRole="alert" accessibilityLabel={accessibilityLabelOffline}>
+            <Text className="text-gray-500 dark:text-zinc-400 text-sm text-center px-4">
+              Pas de connexion réseau et aucune donnée en cache.
+            </Text>
+            <TouchableOpacity onPress={() => void refetch()} className="mt-4 px-6 py-2.5 bg-violet-600 rounded-xl">
+              <Text className="text-white font-semibold text-sm">Réessayer</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {data && !latest && !loading ? (
           <View className="py-16 items-center">
             <Text className="text-gray-500 dark:text-zinc-400 text-sm text-center">
               Aucun ratio disponible pour le moment.{'\n'}Les données apparaîtront après vos premières interprétations.
             </Text>
           </View>
-        ) : (
+        ) : null}
+
+        {latest ? (
           <>
             {/* Carte statut actuel */}
             <View className={`rounded-2xl border p-5 mb-4 ${RATIO_STATUS_COLOR[latest.ratio_status]}`}>
@@ -145,7 +188,7 @@ export default function CommissionsScreen() {
               </View>
             )}
           </>
-        )}
+        ) : null}
       </ScrollView>
     </View>
   );

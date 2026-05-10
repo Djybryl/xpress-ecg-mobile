@@ -20,7 +20,7 @@ export default function SecretaireSubscriptionsScreen() {
   const { colors: joyful } = useTheme();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
-  const { data, loading, error, refetch } = useEconomyMe(true);
+  const { data, loading, error, refetch, accessibilityLabelLoading, accessibilityLabelError, accessibilityLabelOffline } = useEconomyMe(true);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -50,14 +50,42 @@ export default function SecretaireSubscriptionsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={joyful.primary} />
         }
       >
-        {loading && !refreshing && (
-          <ActivityIndicator color={joyful.primary} style={{ marginTop: 32 }} />
+        {loading && !data && !refreshing && (
+          <ActivityIndicator
+            color={joyful.primary}
+            style={{ marginTop: 32 }}
+            accessibilityLabel={accessibilityLabelLoading}
+          />
         )}
-        {error && !loading && (
-          <Text className="text-red-600 text-sm mt-4">{error}</Text>
+        {error === 'offline' && data && (
+          <Text
+            className="text-amber-700 dark:text-amber-300 text-sm mt-4 px-1"
+            accessibilityRole="alert"
+            accessibilityLabel={accessibilityLabelOffline}
+          >
+            Hors ligne — affichage des dernières données en cache.
+          </Text>
+        )}
+        {error && error !== 'offline' && !loading && (
+          <Text
+            className="text-red-600 text-sm mt-4"
+            accessibilityRole="alert"
+            accessibilityLabel={accessibilityLabelError}
+          >
+            {error}
+          </Text>
+        )}
+        {error === 'offline' && !data && !loading && (
+          <Text
+            className="text-gray-600 dark:text-zinc-400 text-sm mt-4"
+            accessibilityRole="alert"
+            accessibilityLabel={accessibilityLabelOffline}
+          >
+            Pas de connexion réseau et aucune donnée en cache.
+          </Text>
         )}
 
-        {!loading && data && (
+        {data && (
           <>
             <View className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 mb-4">
               <View className="flex-row items-start gap-2">

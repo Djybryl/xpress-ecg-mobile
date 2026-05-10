@@ -44,7 +44,7 @@ export function useEcgList(params: UseEcgListParams = {}) {
     setError(null);
     try {
       const qp: Record<string, string | number | boolean | undefined> = {
-        limit: params.limit ?? 100,
+        limit: params.limit ?? 30,
       };
       if (params.referring_doctor_id) qp.referring_doctor_id = params.referring_doctor_id;
       if (params.status) qp.status = params.status;

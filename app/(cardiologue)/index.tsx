@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   RefreshControl, ActivityIndicator,
@@ -38,16 +38,58 @@ function timeAgo(dateStr: string): string {
   return `Il y a ${Math.floor(hours / 24)}j`;
 }
 
-function StatCard({ value, label, color }: { value: number; label: string; color: string }) {
+function StatCard({
+  value, label, color, onPress, hint,
+}: {
+  value: number;
+  label: string;
+  color: string;
+  onPress?: () => void;
+  hint?: string;
+}) {
   return (
-    <View
+    <TouchableOpacity
       className={`flex-1 ${color} rounded-2xl p-4 items-center`}
+      onPress={onPress}
+      activeOpacity={onPress ? 0.7 : 1}
       accessibilityLabel={`${label} : ${value}`}
-      accessibilityRole="text"
+      accessibilityHint={hint ?? (onPress ? 'Appuyez pour voir la liste' : undefined)}
+      accessibilityRole={onPress ? 'button' : 'text'}
     >
-      <Text className="text-2xl font-bold text-gray-800 dark:text-zinc-100" aria-hidden>{value}</Text>
-      <Text className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5 text-center" aria-hidden>{label}</Text>
-    </View>
+      <Text className="text-2xl font-bold text-gray-800 dark:text-zinc-100">{value}</Text>
+      <Text className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5 text-center">{label}</Text>
+      {onPress ? (
+        <Text className="text-[9px] text-gray-400 dark:text-zinc-500 mt-1">Voir →</Text>
+      ) : null}
+    </TouchableOpacity>
+  );
+}
+
+function DeadlineRemaining({ deadline }: { deadline: string }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, [deadline]);
+
+  const end = new Date(deadline).getTime();
+  const ms = end - now;
+  if (Number.isNaN(end)) return null;
+  if (ms <= 0) {
+    return (
+      <Text style={{ fontSize: 10, color: '#dc2626', fontWeight: '600', marginTop: 2 }}>
+        Échéance dépassée
+      </Text>
+    );
+  }
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const parts = h > 0 ? `${h} h ${m} min` : `${Math.max(0, m)} min`;
+  return (
+    <Text style={{ fontSize: 10, color: '#d97706', fontWeight: '500', marginTop: 2 }}>
+      Temps restant : {parts}
+    </Text>
   );
 }
 
@@ -147,14 +189,101 @@ export default function CardiologueHome() {
           </View>
         ) : stats ? (
           <>
+            {urgentOpen.length > 0 && (
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#ef4444',
+                  borderRadius: 14,
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  marginBottom: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                }}
+                onPress={() => router.push('/(cardiologue)/queue?filter=urgent' as Href)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={`${urgentOpen.length} ECG urgent${urgentOpen.length > 1 ? 's' : ''} en attente`}
+                accessibilityHint="Appuyez pour voir les ECG urgents"
+              >
+                <Ionicons name="flash" size={18} color="white" />
+                <Text style={{ flex: 1, color: 'white', fontWeight: '700', fontSize: 13 }}>
+                  {urgentOpen.length} ECG urgent{urgentOpen.length > 1 ? 's' : ''} en attente
+                </Text>
+                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>Voir →</Text>
+              </TouchableOpacity>
+            )}
             <View className="flex-row gap-2 mb-3 mt-2">
-              <StatCard value={stats.assigned_count} label={t.dashboard.assignedToMe} color="bg-sky-50 dark:bg-sky-950/40" />
-              <StatCard value={stats.analyzing_count} label={t.dashboard.analyzing} color="bg-indigo-50 dark:bg-indigo-950/40" />
+              <StatCard
+                value={stats.assigned_count}
+                label={t.dashboard.assignedToMe}
+                color="bg-sky-50 dark:bg-sky-950/40"
+                onPress={() => router.push('/(cardiologue)/mes-ecg' as Href)}
+                hint="Voir mes ECG assignés"
+              />
+              <StatCard
+                value={stats.analyzing_count}
+                label={t.dashboard.analyzing}
+                color="bg-indigo-50 dark:bg-indigo-950/40"
+                onPress={
+                  myActiveEcg
+                    ? () => router.push(`/(cardiologue)/interpret/${myActiveEcg.id}` as Href)
+                    : undefined
+                }
+                hint={myActiveEcg ? 'Reprendre l\'analyse en cours' : undefined}
+              />
             </View>
             <View className="flex-row gap-2 mb-4">
-              <StatCard value={stats.completed_today} label={t.dashboard.completedToday} color="bg-emerald-50 dark:bg-emerald-950/40" />
-              <StatCard value={stats.urgent_count} label={t.dashboard.openUrgencies} color="bg-rose-50 dark:bg-rose-950/40" />
+              <StatCard
+                value={stats.completed_today}
+                label={t.dashboard.completedToday}
+                color="bg-emerald-50 dark:bg-emerald-950/40"
+                onPress={() => router.push('/(cardiologue)/history' as Href)}
+                hint="Voir l'historique du jour"
+              />
+              <StatCard
+                value={stats.urgent_count}
+                label={t.dashboard.openUrgencies}
+                color="bg-rose-50 dark:bg-rose-950/40"
+                onPress={
+                  stats.urgent_count > 0
+                    ? () => router.push('/(cardiologue)/queue?filter=urgent' as Href)
+                    : undefined
+                }
+                hint={stats.urgent_count > 0 ? 'Voir les ECG urgents' : undefined}
+              />
             </View>
+
+            {stats.analyzing_count > 0 && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  backgroundColor: '#f0fdf4',
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  marginBottom: 12,
+                  borderWidth: 1,
+                  borderColor: '#bbf7d0',
+                }}
+              >
+                <View
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: '#22c55e',
+                  }}
+                />
+                <Text style={{ fontSize: 12, color: '#15803d', fontWeight: '600' }}>
+                  Réseau actif — {stats.analyzing_count} interprétation
+                  {stats.analyzing_count > 1 ? 's' : ''} en cours
+                </Text>
+              </View>
+            )}
 
             {/* ─── Carte « Mon ECG en cours » ───────────────── */}
             {myActiveEcg && (
@@ -179,6 +308,18 @@ export default function CardiologueHome() {
                     {myActiveEcg.patient_name}
                     {myActiveEcg.urgency === 'urgent' ? ' ⚡' : ''}
                   </Text>
+                  {myActiveEcg.deadline ? (
+                    <>
+                      <Text style={{ fontSize: 11, color: '#f59e0b', fontWeight: '600', marginTop: 2 }}>
+                        ⏱ Deadline :{' '}
+                        {new Date(myActiveEcg.deadline).toLocaleTimeString('fr-FR', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </Text>
+                      <DeadlineRemaining deadline={myActiveEcg.deadline} />
+                    </>
+                  ) : null}
                   <Text className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
                     {myActiveEcg.reference} · {myActiveEcg.medical_center}
                   </Text>

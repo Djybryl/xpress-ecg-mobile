@@ -129,7 +129,7 @@ export default function RequestsScreen() {
 
   const { records, loading, error, refetch } = useEcgList({
     referring_doctor_id: user?.id,
-    limit: 200,
+    limit: 50,
     enabled: !!user?.id,
   });
 

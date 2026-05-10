@@ -4,6 +4,7 @@ import {
   Alert, ActivityIndicator, Platform, Modal,
   KeyboardAvoidingView, Animated, Pressable,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -16,6 +17,9 @@ import ECGImageCapture, { type ECGCaptureMultiResult } from '@/components/ECGIma
 import { useTheme } from '@/providers/ThemeProvider';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
+
+const DRAFT_KEY = 'xecg-new-ecg-draft';
+const DRAFT_TTL_MS = 24 * 60 * 60 * 1000; // 24 heures
 
 type Step = 1 | 2 | 3 | 4;
 const STEP_LABELS = ['Patient', 'ECG', 'Contexte', 'Envoi'];
@@ -201,6 +205,58 @@ export default function NewEcgScreen() {
   const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
   const [freeText, setFreeText] = useState('');
 
+  // ── Restauration du brouillon au montage ───────────────────────────────
+  useEffect(() => {
+    AsyncStorage.getItem(DRAFT_KEY).then(raw => {
+      if (!raw) return;
+      try {
+        const draft = JSON.parse(raw);
+        const age = Date.now() - new Date(draft.savedAt).getTime();
+        if (age > DRAFT_TTL_MS) {
+          AsyncStorage.removeItem(DRAFT_KEY);
+          return;
+        }
+        Alert.alert(
+          'Brouillon disponible',
+          'Un formulaire non envoyé a été trouvé. Voulez-vous le reprendre ?',
+          [
+            { text: 'Ignorer', style: 'cancel',
+              onPress: () => AsyncStorage.removeItem(DRAFT_KEY) },
+            { text: 'Reprendre', onPress: () => {
+              if (draft.isNewPatient) {
+                setIsNewPatient(true);
+                setNewPatientName(draft.patientName ?? '');
+                setNewPatientDob(draft.newPatientDob ?? '');
+                setNewPatientGender(draft.newPatientGender ?? '');
+              }
+              setUrgency(draft.urgency ?? 'normal');
+              setFreeText(draft.freeText ?? '');
+              setSelectedTemplates(new Set(draft.selectedTemplates ?? []));
+              setStep(2);
+            }},
+          ],
+        );
+      } catch { AsyncStorage.removeItem(DRAFT_KEY); }
+    });
+  }, []);
+
+  // ── Sauvegarde automatique du brouillon (step >= 2) ────────────────────
+  useEffect(() => {
+    if (step < 2) return;
+    const draft = {
+      savedAt: new Date().toISOString(),
+      patientName: isNewPatient ? newPatientName : selectedPatient?.name,
+      patientId: selectedPatient?.id ?? null,
+      isNewPatient,
+      newPatientDob,
+      newPatientGender,
+      urgency,
+      freeText,
+      selectedTemplates: Array.from(selectedTemplates),
+    };
+    AsyncStorage.setItem(DRAFT_KEY, JSON.stringify(draft)).catch(() => null);
+  }, [step, newPatientName, selectedPatient, urgency, freeText, selectedTemplates]);
+
   const { patients, loading: patientsLoading } = usePatientList({
     limit: 200,
     enabled: !!user?.id,
@@ -370,6 +426,7 @@ export default function NewEcgScreen() {
   }, [ecgFile, user, selectedPatient, isNewPatient, newPatientName, newPatientDob, newPatientGender, urgency, selectedTemplates, freeText]);
 
   const resetForm = useCallback(() => {
+    AsyncStorage.removeItem(DRAFT_KEY).catch(() => null);
     setStep(1);
     setSelectedPatient(null);
     setIsNewPatient(false);

@@ -6,6 +6,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useRoleGuard } from '@/hooks/useRoleGuard';
 import { useAuth } from '@/providers/AuthProvider';
 import { useCardiologistDashboard } from '@/hooks/useCardiologistDashboard';
+import { useMyAssignedEcg } from '@/hooks/useMyAssignedEcg';
 
 function TabIcon({
   name,
@@ -94,9 +95,9 @@ export default function CardiologueTabLayout() {
   const { colors: joyful } = useTheme();
   const insets = useSafeAreaInsets();
   const { stats } = useCardiologistDashboard(!!user?.id);
+  const { pendingCount: myEcgBadge } = useMyAssignedEcg(user?.id);
 
   const queueBadge = (stats?.assigned_count ?? 0) + (stats?.analyzing_count ?? 0);
-  const secondOpinionBadge = stats?.pending_second_opinions ?? 0;
 
   if (!ok) return null;
 
@@ -154,35 +155,21 @@ export default function CardiologueTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="commissions"
+        name="mes-ecg"
         options={{
-          title: 'Ratios',
-          tabBarAccessibilityLabel: 'Ratios et commissions',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="analytics" label="Ratios" focused={focused} color={joyful.tabReports} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="history"
-        options={{
-          title: 'Historique',
-          tabBarAccessibilityLabel: 'Historique des interprétations',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="time" label="Historique" focused={focused} color={joyful.tabReports} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="second-opinions"
-        options={{
-          title: 'Second avis',
+          title: 'Mes ECG',
           tabBarAccessibilityLabel:
-            secondOpinionBadge > 0
-              ? `Second avis, ${secondOpinionBadge} demande${secondOpinionBadge > 1 ? 's' : ''} en attente`
-              : 'Second avis',
+            myEcgBadge > 0
+              ? `Mes ECG, ${myEcgBadge} à prendre en charge`
+              : 'Mes ECG',
           tabBarIcon: ({ focused }) => (
-            <TabIcon name="people" label="2e avis" focused={focused} color={joyful.tabRequests} badge={secondOpinionBadge} />
+            <TabIcon
+              name="person-circle"
+              label="Mes ECG"
+              focused={focused}
+              color={joyful.tabRequests}
+              badge={myEcgBadge}
+            />
           ),
         }}
       />
@@ -196,6 +183,25 @@ export default function CardiologueTabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="plus"
+        options={{
+          title: 'Plus',
+          tabBarAccessibilityLabel: 'Plus de fonctionnalités',
+          tabBarIcon: ({ focused }) => (
+            <TabIcon
+              name="ellipsis-horizontal"
+              label="Plus"
+              focused={focused}
+              color={joyful.tabProfile}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen name="commissions" options={{ href: null, title: 'Ratios' }} />
+      <Tabs.Screen name="history" options={{ href: null, title: 'Historique' }} />
+      <Tabs.Screen name="second-opinions" options={{ href: null, title: 'Second avis' }} />
+      <Tabs.Screen name="commissions-financieres" options={{ href: null, title: 'Commissions' }} />
       <Tabs.Screen name="interpret/[id]" options={{ href: null, title: 'Interprétation' }} />
       <Tabs.Screen name="second-opinion/[id]" options={{ href: null, title: 'Second avis' }} />
       <Tabs.Screen name="request-second-opinion" options={{ href: null, title: 'Demander un second avis' }} />

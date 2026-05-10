@@ -112,6 +112,11 @@ if (useTunnel) {
   printExpoGoUrls({ includeQr: false, prestart: true });
 }
 
+// Force un subdomain sans underscore (Android rejette les hostnames avec _ — RFC STD 3)
+if (useTunnel) {
+  process.env.EXPO_TUNNEL_SUBDOMAIN = 'xpressecg-' + port;
+}
+
 const child = spawn('npx', ['expo', ...expoArgs], {
   stdio: 'inherit',
   shell: true,

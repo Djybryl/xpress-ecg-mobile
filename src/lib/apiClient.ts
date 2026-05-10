@@ -3,6 +3,7 @@
  * Stockage des tokens via expo-secure-store (Keychain natif) au lieu de localStorage/sessionStorage.
  */
 import * as SecureStore from 'expo-secure-store';
+import NetInfo from '@react-native-community/netinfo';
 
 /** Base API sans slash final — doit pointer vers le tunnel ngrok du backend (port 3001), pas vers Expo. */
 export const getResolvedApiBaseUrl = (): string =>
@@ -199,6 +200,16 @@ async function rawRequest<T>(
 
   const fullUrl = url.toString();
   if (__DEV__) console.log(`[API] ${method} ${fullUrl}`);
+
+  // Vérification connectivité avant requête (évite 25s de timeout inutile)
+  const netState = await NetInfo.fetch();
+  if (!netState.isConnected) {
+    throw new ApiError(
+      0,
+      'SERVER_UNREACHABLE',
+      'Pas de connexion réseau. Vérifiez votre WiFi ou données mobiles.',
+    );
+  }
 
   let res: Response;
   try {

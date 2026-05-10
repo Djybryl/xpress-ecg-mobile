@@ -93,7 +93,12 @@ export default function HomeScreen() {
     enabled: !!user?.id,
   });
 
-  const { data: economy, refetch: refetchEconomy } = useEconomyMe(!!user?.id);
+  const {
+    data: economy,
+    refetch: refetchEconomy,
+    error: economyError,
+    accessibilityLabelOffline: economyOfflineLabel,
+  } = useEconomyMe(!!user?.id);
 
   const { patients, refetch: refetchPatients } = usePatientList({ limit: 200, enabled: !!user?.id });
 
@@ -209,6 +214,18 @@ export default function HomeScreen() {
           </View>
           <Ionicons name="chevron-forward" size={16} color="#d1d5db" />
         </TouchableOpacity>
+
+        {economyError === 'offline' && economy != null && (
+          <View
+            className="mx-4 mt-3 p-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-950/40 dark:border-amber-800"
+            accessibilityRole="alert"
+            accessibilityLabel={economyOfflineLabel}
+          >
+            <Text className="text-amber-800 dark:text-amber-200 text-xs font-medium">
+              Hors ligne — quota affiché à partir du cache.
+            </Text>
+          </View>
+        )}
 
         {/* Quota ECG mensuel — plan gratuit uniquement */}
         {isFreeQuota && (
