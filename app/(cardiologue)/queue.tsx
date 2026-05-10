@@ -94,6 +94,28 @@ export default function CardiologueQueueScreen() {
       Alert.alert(t.queue.oneAtATimeTitle, t.queue.oneAtATime);
       return;
     }
+    if (item.urgency !== 'urgent') {
+      const urgentsDispos = records.filter(
+        r => r.urgency === 'urgent'
+          && r.status === 'pending'
+          && !r.assigned_to,
+      );
+      if (urgentsDispos.length > 0) {
+        Alert.alert(
+          t.queue.urgentFirstTitle,
+          t.queue.urgentFirstMessage
+            .replace('{{n}}', String(urgentsDispos.length)),
+          [
+            { text: t.common.cancel, style: 'cancel' },
+            {
+              text: t.queue.urgentFirstCta,
+              onPress: () => setActiveFilter('urgent'),
+            },
+          ],
+        );
+        return;
+      }
+    }
     setTakingId(item.id);
     try {
       await api.post(`/ecg-records/${item.id}/start-analysis`);
@@ -109,7 +131,20 @@ export default function CardiologueQueueScreen() {
     } finally {
       setTakingId(null);
     }
-  }, [user?.id, myInProgressId, refetch, t.queue.oneAtATimeTitle, t.queue.oneAtATime, t.common.error, t.solidarity]);
+  }, [
+    user?.id,
+    myInProgressId,
+    records,
+    refetch,
+    t.queue.oneAtATimeTitle,
+    t.queue.oneAtATime,
+    t.queue.urgentFirstTitle,
+    t.queue.urgentFirstMessage,
+    t.queue.urgentFirstCta,
+    t.common.cancel,
+    t.common.error,
+    t.solidarity,
+  ]);
 
   const handleContinue = useCallback((id: string) => {
     router.push(`/(cardiologue)/interpret/${id}` as Href);

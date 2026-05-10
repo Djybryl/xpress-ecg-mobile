@@ -73,6 +73,9 @@ export const fr = {
     completedShort: 'Terminé',
     oneAtATimeTitle: 'ECG en cours',
     oneAtATime: 'Validez ou abandonnez l\'ECG en cours pour en prendre un autre.',
+    urgentFirstTitle: 'Urgences en attente',
+    urgentFirstMessage: '{{n}} ECG urgent(s) sont en attente. Merci de les traiter en priorité.',
+    urgentFirstCta: 'Voir les urgents',
   },
   interpret: {
     takeOver: 'Prendre en charge',

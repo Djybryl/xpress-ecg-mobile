@@ -75,6 +75,9 @@ export const en: TranslationKeys = {
     completedShort: 'Done',
     oneAtATimeTitle: 'ECG in progress',
     oneAtATime: 'Submit or release the current ECG before picking another one.',
+    urgentFirstTitle: 'Urgent cases pending',
+    urgentFirstMessage: '{{n}} urgent ECG(s) are waiting. Please handle them first.',
+    urgentFirstCta: 'View urgent list',
   },
   interpret: {
     takeOver: 'Take over',
