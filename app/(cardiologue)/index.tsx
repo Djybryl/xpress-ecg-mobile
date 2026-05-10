@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/providers/AuthProvider';
 import { useCardiologistDashboard } from '@/hooks/useCardiologistDashboard';
 import { useCardiologistQueue } from '@/hooks/useCardiologistQueue';
+import { useSolidarityEligibility } from '@/hooks/useSolidarityEligibility';
 import { useNotifications } from '@/hooks/useNotifications';
 import { ECGTraceView } from '@/components/ecg/ECGTraceView';
 import { useTranslation } from '@/i18n';
@@ -65,6 +66,39 @@ function StatCard({
   );
 }
 
+function UrgentPlatformCard({
+  count,
+  label,
+  onPress,
+  hint,
+}: {
+  count: number;
+  label: string;
+  onPress?: () => void;
+  hint?: string;
+}) {
+  const canPress = count > 0 && !!onPress;
+  return (
+    <TouchableOpacity
+      className="flex-1 rounded-2xl p-4 items-center justify-center min-h-[92px]"
+      style={{ backgroundColor: '#ef4444' }}
+      onPress={onPress}
+      disabled={!canPress}
+      activeOpacity={canPress ? 0.8 : 1}
+      accessibilityLabel={`${label} : ${count}`}
+      accessibilityHint={hint}
+      accessibilityRole={canPress ? 'button' : 'text'}
+    >
+      <Ionicons name="flash" size={22} color="white" style={{ marginBottom: 4 }} />
+      <Text className="text-2xl font-bold text-white">{count}</Text>
+      <Text className="text-xs text-center text-white/90 mt-0.5 px-1">{label}</Text>
+      {canPress ? (
+        <Text className="text-[9px] text-white/80 mt-1">Voir →</Text>
+      ) : null}
+    </TouchableOpacity>
+  );
+}
+
 function DeadlineRemaining({ deadline }: { deadline: string }) {
   const [now, setNow] = useState(() => Date.now());
 
@@ -102,6 +136,7 @@ export default function CardiologueHome() {
 
   const { stats, loading: dashLoading, refetch: refetchDash } = useCardiologistDashboard(!!user?.id);
   const { records, loading: queueLoading, refetch: refetchQueue } = useCardiologistQueue(user?.id, 80);
+  const { data: solidarity, loading: solidarityLoading, refetch: refetchSolidarity } = useSolidarityEligibility(user?.id);
   const { unreadCount: notifCount, refetch: refetchNotifs } = useNotifications(!!user?.id);
 
   const mineToStart = useMemo(
@@ -131,9 +166,9 @@ export default function CardiologueHome() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchDash(), refetchQueue(), refetchNotifs()]);
+    await Promise.all([refetchDash(), refetchQueue(), refetchNotifs(), refetchSolidarity()]);
     setRefreshing(false);
-  }, [refetchDash, refetchQueue, refetchNotifs]);
+  }, [refetchDash, refetchQueue, refetchNotifs, refetchSolidarity]);
 
   const loading = dashLoading && !stats;
 
@@ -189,32 +224,33 @@ export default function CardiologueHome() {
           </View>
         ) : stats ? (
           <>
-            {urgentOpen.length > 0 && (
-              <TouchableOpacity
-                style={{
-                  backgroundColor: '#ef4444',
-                  borderRadius: 14,
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  marginBottom: 12,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 10,
-                }}
-                onPress={() => router.push('/(cardiologue)/queue?filter=urgent' as Href)}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel={`${urgentOpen.length} ECG urgent${urgentOpen.length > 1 ? 's' : ''} en attente`}
-                accessibilityHint="Appuyez pour voir les ECG urgents"
-              >
-                <Ionicons name="flash" size={18} color="white" />
-                <Text style={{ flex: 1, color: 'white', fontWeight: '700', fontSize: 13 }}>
-                  {urgentOpen.length} ECG urgent{urgentOpen.length > 1 ? 's' : ''} en attente
-                </Text>
-                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>Voir →</Text>
-              </TouchableOpacity>
-            )}
-            <View className="flex-row gap-2 mb-3 mt-2">
+            <Text className="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-zinc-400 mb-1.5 mt-2">
+              {t.dashboard.sectionPlatform}
+            </Text>
+            <View className="flex-row gap-2 mb-3">
+              <StatCard
+                value={stats.demandes_count}
+                label={t.dashboard.platformOpenQueue}
+                color="bg-slate-50 dark:bg-slate-900/50"
+                onPress={() => router.push('/(cardiologue)/queue' as Href)}
+                hint={t.dashboard.hintPlatformQueue}
+              />
+              <UrgentPlatformCard
+                count={stats.urgent_count}
+                label={t.dashboard.openUrgencies}
+                onPress={
+                  stats.urgent_count > 0
+                    ? () => router.push('/(cardiologue)/queue?filter=urgent' as Href)
+                    : undefined
+                }
+                hint={stats.urgent_count > 0 ? t.dashboard.hintUrgentQueue : undefined}
+              />
+            </View>
+
+            <Text className="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-zinc-400 mb-1.5">
+              {t.dashboard.sectionMyActivity}
+            </Text>
+            <View className="flex-row gap-2 mb-3">
               <StatCard
                 value={stats.assigned_count}
                 label={t.dashboard.assignedToMe}
@@ -223,67 +259,74 @@ export default function CardiologueHome() {
                 hint="Voir mes ECG assignés"
               />
               <StatCard
-                value={stats.analyzing_count}
-                label={t.dashboard.analyzing}
-                color="bg-indigo-50 dark:bg-indigo-950/40"
-                onPress={
-                  myActiveEcg
-                    ? () => router.push(`/(cardiologue)/interpret/${myActiveEcg.id}` as Href)
-                    : undefined
-                }
-                hint={myActiveEcg ? 'Reprendre l\'analyse en cours' : undefined}
-              />
-            </View>
-            <View className="flex-row gap-2 mb-4">
-              <StatCard
                 value={stats.completed_today}
                 label={t.dashboard.completedToday}
                 color="bg-emerald-50 dark:bg-emerald-950/40"
                 onPress={() => router.push('/(cardiologue)/history' as Href)}
                 hint="Voir l'historique du jour"
               />
-              <StatCard
-                value={stats.urgent_count}
-                label={t.dashboard.openUrgencies}
-                color="bg-rose-50 dark:bg-rose-950/40"
-                onPress={
-                  stats.urgent_count > 0
-                    ? () => router.push('/(cardiologue)/queue?filter=urgent' as Href)
-                    : undefined
-                }
-                hint={stats.urgent_count > 0 ? 'Voir les ECG urgents' : undefined}
-              />
             </View>
 
-            {stats.analyzing_count > 0 && (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 8,
-                  backgroundColor: '#f0fdf4',
-                  borderRadius: 12,
-                  paddingHorizontal: 14,
-                  paddingVertical: 8,
-                  marginBottom: 12,
-                  borderWidth: 1,
-                  borderColor: '#bbf7d0',
-                }}
-              >
-                <View
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor: '#22c55e',
-                  }}
-                />
-                <Text style={{ fontSize: 12, color: '#15803d', fontWeight: '600' }}>
-                  Réseau actif — {stats.analyzing_count} interprétation
-                  {stats.analyzing_count > 1 ? 's' : ''} en cours
-                </Text>
+            <Text className="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-zinc-400 mb-1.5">
+              {t.dashboard.sectionThisWeek}
+            </Text>
+            <TouchableOpacity
+              className="bg-white dark:bg-zinc-900 rounded-2xl p-4 mb-4 border border-violet-100 dark:border-violet-900/40"
+              onPress={() => router.push('/(cardiologue)/commissions' as Href)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`${t.dashboard.giveGetWeekTitle}. ${t.dashboard.giveGetSeeRatios}`}
+            >
+              <View className="flex-row items-center justify-between mb-2">
+                <View className="flex-row items-center gap-2 flex-1">
+                  <Ionicons name="heart-outline" size={20} color="#7c3aed" />
+                  <View className="flex-1">
+                    <Text className="text-sm font-bold text-gray-900 dark:text-zinc-100">
+                      {t.dashboard.giveGetWeekTitle}
+                    </Text>
+                    <Text className="text-[11px] text-gray-500 dark:text-zinc-400 mt-0.5">
+                      {t.dashboard.giveGetWeekSubtitle}
+                    </Text>
+                  </View>
+                </View>
+                {solidarityLoading ? (
+                  <ActivityIndicator color="#7c3aed" size="small" />
+                ) : null}
               </View>
-            )}
+              {solidarity && !solidarityLoading ? (
+                <>
+                  <View className="h-2 rounded-full bg-gray-100 dark:bg-zinc-800 overflow-hidden mb-2">
+                    <View
+                      className={solidarity.eligible || solidarity.required === 0 ? 'bg-emerald-500' : 'bg-amber-500'}
+                      style={{
+                        width:
+                          solidarity.required === 0
+                            ? '100%'
+                            : `${Math.min(100, (solidarity.done / solidarity.required) * 100)}%`,
+                        height: '100%',
+                        borderRadius: 999,
+                      }}
+                    />
+                  </View>
+                  <Text className="text-xs font-semibold text-gray-700 dark:text-zinc-300">
+                    {solidarity.required === 0
+                      ? t.dashboard.giveGetWeekDisabled
+                      : solidarity.eligible
+                        ? `${t.dashboard.giveGetWeekProgress.replace('{{done}}', String(solidarity.done)).replace('{{required}}', String(solidarity.required))} · ${t.dashboard.giveGetWeekMet}`
+                        : t.dashboard.giveGetWeekProgress
+                            .replace('{{done}}', String(solidarity.done))
+                            .replace('{{required}}', String(solidarity.required))}
+                  </Text>
+                </>
+              ) : !solidarityLoading && !solidarity ? (
+                <Text className="text-xs text-gray-500 dark:text-zinc-400">
+                  {t.dashboard.giveGetWeekSubtitle}
+                </Text>
+              ) : null}
+              <Text className="text-[11px] text-violet-600 dark:text-violet-400 font-semibold mt-2">
+                {t.dashboard.giveGetSeeRatios}
+              </Text>
+            </TouchableOpacity>
 
             {/* ─── Carte « Mon ECG en cours » ───────────────── */}
             {myActiveEcg && (
