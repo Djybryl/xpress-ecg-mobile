@@ -109,6 +109,11 @@ interface ECGTraceViewProps {
   compact?: boolean;
   /** FC issue du dossier ECG (GET /ecg-records/:id) si disponible */
   recordHeartRate?: number | null;
+  /**
+   * Incrémenter pour ouvrir le plein écran depuis l’extérieur
+   * (mode compact : pas de bouton plein écran dans la toolbar).
+   */
+  fullscreenRequestNonce?: number;
 }
 
 export function ECGTraceView({
@@ -117,6 +122,7 @@ export function ECGTraceView({
   height = 280,
   compact,
   recordHeartRate,
+  fullscreenRequestNonce,
 }: ECGTraceViewProps & { accessibilityLabel?: string }) {
   const { signals, fileKind, imageUrl, loading, error } = useEcgSignals(ecgId, files);
   const { colors } = useTheme();
@@ -205,6 +211,19 @@ export function ECGTraceView({
     dispatch({ type: 'CLOSE_FULLSCREEN' });
     if (toolbarTimer.current) clearTimeout(toolbarTimer.current);
   }, []);
+
+  const prevFullscreenNonce = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (fullscreenRequestNonce === undefined) return;
+    if (prevFullscreenNonce.current === undefined) {
+      prevFullscreenNonce.current = fullscreenRequestNonce;
+      return;
+    }
+    if (fullscreenRequestNonce !== prevFullscreenNonce.current) {
+      prevFullscreenNonce.current = fullscreenRequestNonce;
+      void openFullscreen();
+    }
+  }, [fullscreenRequestNonce, openFullscreen]);
 
   useEffect(() => {
     return () => {
