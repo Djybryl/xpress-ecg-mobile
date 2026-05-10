@@ -12,7 +12,6 @@ export interface InterpretDraft {
   prInterval: string;
   qrsDuration: string;
   qtInterval: string;
-  observations: string;
   conclusion: string;
   signConfirmed: boolean;
   updatedAt: number;

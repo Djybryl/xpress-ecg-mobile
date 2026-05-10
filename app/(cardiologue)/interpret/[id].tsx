@@ -1,5 +1,5 @@
 /**
- * Écran d'interprétation ECG — tracé compact en tête, formulaire en sections numérotées.
+ * Écran d'interprétation ECG — tracé en tête, formulaire en sections numérotées.
  */
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
@@ -52,6 +52,90 @@ function SectionHeader({ n, label }: { n: number; label: string }) {
   );
 }
 
+type OutlinedMeasureFieldProps = {
+  label: string;
+  labelBg: string;
+  labelColor: string;
+  borderColor: string;
+  inputBg: string;
+  textColor: string;
+  placeholderColor: string;
+  unitColor: string;
+  value: string;
+  onChangeText: (t: string) => void;
+  unit?: string;
+  keyboardType?: 'default' | 'number-pad';
+  alertExtra?: Record<string, unknown>;
+  accessibilityLabel: string;
+  placeholder?: string;
+};
+
+function OutlinedMeasureField({
+  label,
+  labelBg,
+  labelColor,
+  borderColor,
+  inputBg,
+  textColor,
+  placeholderColor,
+  unitColor,
+  value,
+  onChangeText,
+  unit,
+  keyboardType = 'default',
+  alertExtra,
+  accessibilityLabel,
+  placeholder,
+}: OutlinedMeasureFieldProps) {
+  return (
+    <View style={{ position: 'relative', flex: 1 }}>
+      <Text
+        style={{
+          position: 'absolute',
+          top: -7,
+          left: 10,
+          paddingHorizontal: 4,
+          backgroundColor: labelBg,
+          fontSize: 10,
+          color: labelColor,
+          zIndex: 1,
+        }}
+      >
+        {label}
+      </Text>
+      <TextInput
+        style={{
+          borderWidth: 1,
+          borderColor,
+          borderRadius: 8,
+          backgroundColor: inputBg,
+          paddingHorizontal: 10,
+          paddingVertical: 8,
+          paddingRight: unit ? 30 : 10,
+          fontSize: 13,
+          textAlign: 'center',
+          color: textColor,
+          ...(alertExtra && typeof alertExtra === 'object' ? alertExtra : {}),
+        }}
+        placeholder={placeholder}
+        placeholderTextColor={placeholderColor}
+        keyboardType={keyboardType}
+        value={value}
+        onChangeText={onChangeText}
+        accessibilityLabel={accessibilityLabel}
+      />
+      {unit ? (
+        <Text
+          style={{ position: 'absolute', right: 8, top: 10, fontSize: 10, color: unitColor }}
+          pointerEvents="none"
+        >
+          {unit}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 export default function InterpretEcgScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
@@ -72,7 +156,8 @@ export default function InterpretEcgScreen() {
 
   const [aiDismissed, setAiDismissed] = useState(false);
   const [showAiPreview, setShowAiPreview] = useState(false);
-  const [traceFullscreenNonce, setTraceFullscreenNonce] = useState(0);
+  const [showAxisPicker, setShowAxisPicker] = useState(false);
+  const conclusionEditedManuallyRef = useRef(false);
   const [rhythmCustomMode, setRhythmCustomMode] = useState(false);
   const [customPrompt, setCustomPrompt] = useState<{
     visible: boolean;
@@ -86,7 +171,6 @@ export default function InterpretEcgScreen() {
   const [prInterval, setPrInterval] = useState('');
   const [qrsDuration, setQrsDuration] = useState('');
   const [qtInterval, setQtInterval] = useState('');
-  const [observations, setObservations] = useState('');
   const [conclusion, setConclusion] = useState('');
   const [isNormal, setIsNormal] = useState(false);
   const [signConfirmed, setSignConfirmed] = useState(true);
@@ -103,6 +187,7 @@ export default function InterpretEcgScreen() {
     setShowAiPreview(false);
     didApplyRecordHr.current = false;
     setRhythmCustomMode(false);
+    conclusionEditedManuallyRef.current = false;
   }, [id]);
 
   useEffect(() => {
@@ -115,8 +200,10 @@ export default function InterpretEcgScreen() {
         setPrInterval(draft.prInterval ?? '');
         setQrsDuration(draft.qrsDuration ?? '');
         setQtInterval(draft.qtInterval ?? '');
-        setObservations(draft.observations ?? '');
-        if (draft.conclusion) setConclusion(draft.conclusion);
+        if (draft.conclusion?.trim()) {
+          conclusionEditedManuallyRef.current = true;
+          setConclusion(draft.conclusion);
+        }
         setSignConfirmed(draft.signConfirmed ?? true);
       }
       setDraftRestored(true);
@@ -141,7 +228,6 @@ export default function InterpretEcgScreen() {
       prInterval,
       qrsDuration,
       qtInterval,
-      observations,
       conclusion,
       signConfirmed,
     });
@@ -153,7 +239,6 @@ export default function InterpretEcgScreen() {
     prInterval,
     qrsDuration,
     qtInterval,
-    observations,
     conclusion,
     signConfirmed,
     saveDraft,
@@ -211,6 +296,63 @@ export default function InterpretEcgScreen() {
     return { severity: need, text: parts.join(' · ') };
   }, [hasCritical, hasWarning, alertLevels, t.interpret]);
 
+  const axisToConclusionLabel = useMemo(() => {
+    if (locale === 'en') {
+      return {
+        Normal: 'Normal electrical axis',
+        'Left axis deviation': 'Left axis deviation',
+        'Right axis deviation': 'Right axis deviation',
+        Indeterminate: 'Indeterminate electrical axis',
+      } as Record<string, string>;
+    }
+    return {
+      Normal: 'Axe électrique normal',
+      'Dévié à gauche': 'Déviation axiale gauche',
+      'Dévié à droite': 'Déviation axiale droite',
+      Indéterminé: 'Axe électrique indéterminé',
+    } as Record<string, string>;
+  }, [locale]);
+
+  const composeAutoConclusion = useCallback(() => {
+    const parts: string[] = [];
+    if (rhythm) {
+      if (heartRate) {
+        parts.push(
+          locale === 'en' ? `${rhythm} at ${heartRate} bpm` : `${rhythm} à ${heartRate} bpm`,
+        );
+      } else {
+        parts.push(rhythm);
+      }
+    } else if (heartRate) {
+      parts.push(
+        locale === 'en' ? `Heart rate ${heartRate} bpm` : `Fréquence cardiaque ${heartRate} bpm`,
+      );
+    }
+    if (axis && axisToConclusionLabel[axis]) {
+      parts.push(axisToConclusionLabel[axis]);
+    } else if (axis) {
+      parts.push(axis);
+    }
+    const intervals: string[] = [];
+    if (prInterval.trim()) intervals.push(`PR ${prInterval.trim()} ms`);
+    if (qrsDuration.trim()) intervals.push(`QRS ${qrsDuration.trim()} ms`);
+    if (qtInterval.trim()) intervals.push(`QTc ${qtInterval.trim()} ms`);
+    if (intervals.length > 0) {
+      parts.push(`${t.interpret.autoIntervalsPrefix} ${intervals.join(', ')}`);
+    }
+    return parts.join('. ') + (parts.length ? '.' : '');
+  }, [
+    rhythm,
+    axis,
+    heartRate,
+    prInterval,
+    qrsDuration,
+    qtInterval,
+    axisToConclusionLabel,
+    locale,
+    t.interpret.autoIntervalsPrefix,
+  ]);
+
   const isAssignedToMe = record?.assigned_to === user?.id;
   const preAnalyzing =
     record?.status === 'pending' || record?.status === 'validated' || record?.status === 'assigned';
@@ -220,6 +362,27 @@ export default function InterpretEcgScreen() {
   const isReadOnly =
     !!record &&
     (record.status === 'completed' || (!canStartAnalysis && !isAnalyzing && !analysisStarted));
+
+  useEffect(() => {
+    if (!draftRestored) return;
+    if (conclusionEditedManuallyRef.current) return;
+    if (isReadOnly) return;
+    const auto = composeAutoConclusion();
+    setConclusion(prev => {
+      if (auto === prev) return prev;
+      return auto;
+    });
+  }, [
+    draftRestored,
+    rhythm,
+    axis,
+    heartRate,
+    prInterval,
+    qrsDuration,
+    qtInterval,
+    composeAutoConclusion,
+    isReadOnly,
+  ]);
 
   const completionItems = useMemo(
     () => ({
@@ -245,7 +408,6 @@ export default function InterpretEcgScreen() {
       !!prInterval.trim() ||
       !!qrsDuration.trim() ||
       !!qtInterval.trim() ||
-      !!observations.trim() ||
       !!conclusion.trim() ||
       isNormal ||
       !signConfirmed
@@ -259,7 +421,6 @@ export default function InterpretEcgScreen() {
     prInterval,
     qrsDuration,
     qtInterval,
-    observations,
     conclusion,
     isNormal,
     signConfirmed,
@@ -350,6 +511,7 @@ export default function InterpretEcgScreen() {
     const draft = aiAnalysis?.pre_report_draft;
     if (!draft) return;
     const apply = () => {
+      conclusionEditedManuallyRef.current = true;
       setConclusion(draft);
       setShowAiPreview(false);
     };
@@ -376,7 +538,7 @@ export default function InterpretEcgScreen() {
     try {
       const measurements = buildMeasurementsPayload(heartRate, prInterval, qrsDuration, qtInterval);
       await api.post(`/ecg-records/${id}/complete-analysis`, {
-        interpretation: { rhythm, axis, observations, conclusion, isNormal },
+        interpretation: { rhythm, axis, conclusion, isNormal },
         measurements,
         sign_confirmed: signConfirmed,
         signature_method: signConfirmed ? 'explicit_confirm' : undefined,
@@ -401,7 +563,6 @@ export default function InterpretEcgScreen() {
     submitting,
     rhythm,
     axis,
-    observations,
     conclusion,
     isNormal,
     heartRate,
@@ -511,6 +672,9 @@ export default function InterpretEcgScreen() {
   const headerBg = record.urgency === 'urgent' ? '#b91c1c' : joyful.primaryDark;
   const keyboardVerticalOffset = Platform.OS === 'ios' ? insets.top + 8 : 0;
   const aiModalMaxH = Math.round(windowHeight * 0.8);
+  const nu = joyful.neutral;
+  const labelBg = nu.surface;
+  const axisPickerMaxH = Math.round(windowHeight * 0.45);
 
   return (
     <KeyboardAvoidingView
@@ -560,25 +724,13 @@ export default function InterpretEcgScreen() {
         </View>
 
         {!canStartAnalysis || analysisStarted ? (
-          <View className="px-2 pt-2 bg-gray-50 dark:bg-zinc-950">
+          <View style={{ paddingHorizontal: 8, paddingTop: 8 }} className="bg-gray-50 dark:bg-zinc-950">
             <ECGTraceView
               ecgId={id!}
               files={record.files}
-              height={90}
-              compact
+              height={240}
               recordHeartRate={record.heart_rate}
-              fullscreenRequestNonce={traceFullscreenNonce}
             />
-            <TouchableOpacity
-              onPress={() => setTraceFullscreenNonce(n => n + 1)}
-              className="py-1.5"
-              accessibilityRole="button"
-              accessibilityLabel={t.interpret.traceFullCta}
-            >
-              <Text className="text-[11px] text-violet-600 dark:text-violet-400 font-medium text-center">
-                {t.interpret.traceFullCta}
-              </Text>
-            </TouchableOpacity>
           </View>
         ) : (
           <View className="px-4 pt-3 bg-gray-50 dark:bg-zinc-950">
@@ -626,7 +778,7 @@ export default function InterpretEcgScreen() {
           </View>
         )}
 
-        {draftRestored && !isReadOnly && (rhythm || conclusion || observations.trim()) && completionPct < 100 && (
+        {draftRestored && !isReadOnly && (rhythm || conclusion) && completionPct < 100 && (
           <View className="mx-4 mt-1 flex-row items-center gap-1.5">
             <Ionicons name="save-outline" size={11} color="#6b7280" />
             <Text className="text-[10px] text-gray-500 dark:text-zinc-400">{t.interpret.draftRestored}</Text>
@@ -671,96 +823,116 @@ export default function InterpretEcgScreen() {
               <View className="bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 p-3">
                 <SectionHeader n={1} label={t.interpret.section1Title} />
                 <View className="flex-row gap-2 mb-2">
-                  <View className="flex-1">
-                    <Text className="text-[10px] text-gray-500 dark:text-zinc-400 mb-1">{t.interpret.heartRateBpm}</Text>
-                    <View className="relative">
-                      <TextInput
-                        className="bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg pl-3 pr-9 py-2 text-sm text-gray-900 dark:text-zinc-100"
-                        style={inputAlertStyle(alertLevels.fc)}
-                        placeholder={t.interpret.fcPlaceholder}
-                        placeholderTextColor="#9ca3af"
-                        keyboardType="number-pad"
-                        value={heartRate}
-                        onChangeText={setHeartRate}
-                        accessibilityLabel={t.interpret.heartRate}
-                      />
+                  <OutlinedMeasureField
+                    label={t.interpret.heartRateBpm}
+                    labelBg={labelBg}
+                    labelColor={nu.textMuted}
+                    borderColor={nu.border}
+                    inputBg={nu.inputBg}
+                    textColor={nu.text}
+                    placeholderColor={nu.placeholder}
+                    unitColor={nu.textMuted}
+                    value={heartRate}
+                    onChangeText={setHeartRate}
+                    unit={t.interpret.bpmUnit}
+                    keyboardType="number-pad"
+                    alertExtra={inputAlertStyle(alertLevels.fc)}
+                    accessibilityLabel={t.interpret.heartRate}
+                    placeholder={t.interpret.fcPlaceholder}
+                  />
+                  <OutlinedMeasureField
+                    label={t.interpret.qtcLabel}
+                    labelBg={labelBg}
+                    labelColor={nu.textMuted}
+                    borderColor={nu.border}
+                    inputBg={nu.inputBg}
+                    textColor={nu.text}
+                    placeholderColor={nu.placeholder}
+                    unitColor={nu.textMuted}
+                    value={qtInterval}
+                    onChangeText={setQtInterval}
+                    unit={t.interpret.intervalsUnit}
+                    keyboardType="number-pad"
+                    alertExtra={inputAlertStyle(alertLevels.qtc)}
+                    accessibilityLabel={`${t.interpret.qtcLabel} (${t.interpret.intervalsUnit})`}
+                    placeholder={t.interpret.emptyDash}
+                  />
+                  <View style={{ position: 'relative', flex: 1 }}>
+                    <Text
+                      style={{
+                        position: 'absolute',
+                        top: -7,
+                        left: 10,
+                        paddingHorizontal: 4,
+                        backgroundColor: labelBg,
+                        fontSize: 10,
+                        color: nu.textMuted,
+                        zIndex: 1,
+                      }}
+                    >
+                      {t.interpret.axis}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setShowAxisPicker(true)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${t.interpret.axisElectrical}. ${axis || t.interpret.axisChoose}`}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: nu.border,
+                        borderRadius: 8,
+                        backgroundColor: nu.inputBg,
+                        paddingHorizontal: 10,
+                        paddingVertical: 10,
+                        minHeight: 40,
+                        justifyContent: 'center',
+                      }}
+                    >
                       <Text
-                        className="absolute right-2 top-2 text-[10px] text-gray-400"
-                        pointerEvents="none"
+                        className="text-[13px] text-center"
+                        numberOfLines={1}
+                        style={{ color: axis ? nu.text : nu.placeholder }}
                       >
-                        {t.interpret.bpmUnit}
+                        {axis || t.interpret.axisChoose}
                       </Text>
-                    </View>
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-[10px] text-gray-500 dark:text-zinc-400 mb-1">{t.interpret.qtcLabel}</Text>
-                    <View className="relative">
-                      <TextInput
-                        className="bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg pl-3 pr-8 py-2 text-sm text-gray-900 dark:text-zinc-100"
-                        style={inputAlertStyle(alertLevels.qtc)}
-                        placeholder={t.interpret.emptyDash}
-                        placeholderTextColor="#9ca3af"
-                        keyboardType="number-pad"
-                        value={qtInterval}
-                        onChangeText={setQtInterval}
-                        accessibilityLabel={`${t.interpret.qtcLabel} (${t.interpret.intervalsUnit})`}
-                      />
-                      <Text
-                        className="absolute right-2 top-2 text-[10px] text-gray-400"
-                        pointerEvents="none"
-                      >
-                        {t.interpret.intervalsUnit}
-                      </Text>
-                    </View>
+                    </TouchableOpacity>
                   </View>
                 </View>
                 <View className="flex-row gap-2 mb-1">
-                  <View className="flex-1">
-                    <Text className="text-[10px] text-gray-500 dark:text-zinc-400 mb-1">
-                      {t.interpret.prInterval}
-                    </Text>
-                    <View className="relative">
-                      <TextInput
-                        className="bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg pl-3 pr-8 py-2 text-sm text-gray-900 dark:text-zinc-100"
-                        style={inputAlertStyle(alertLevels.pr)}
-                        placeholder={t.interpret.emptyDash}
-                        placeholderTextColor="#9ca3af"
-                        keyboardType="number-pad"
-                        value={prInterval}
-                        onChangeText={setPrInterval}
-                        accessibilityLabel={`${t.interpret.prInterval} (${t.interpret.intervalsUnit})`}
-                      />
-                      <Text
-                        className="absolute right-2 top-2 text-[10px] text-gray-400"
-                        pointerEvents="none"
-                      >
-                        {t.interpret.intervalsUnit}
-                      </Text>
-                    </View>
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-[10px] text-gray-500 dark:text-zinc-400 mb-1">
-                      {t.interpret.qrsDuration}
-                    </Text>
-                    <View className="relative">
-                      <TextInput
-                        className="bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg pl-3 pr-8 py-2 text-sm text-gray-900 dark:text-zinc-100"
-                        style={inputAlertStyle(alertLevels.qrs)}
-                        placeholder={t.interpret.emptyDash}
-                        placeholderTextColor="#9ca3af"
-                        keyboardType="number-pad"
-                        value={qrsDuration}
-                        onChangeText={setQrsDuration}
-                        accessibilityLabel={`${t.interpret.qrsDuration} (${t.interpret.intervalsUnit})`}
-                      />
-                      <Text
-                        className="absolute right-2 top-2 text-[10px] text-gray-400"
-                        pointerEvents="none"
-                      >
-                        {t.interpret.intervalsUnit}
-                      </Text>
-                    </View>
-                  </View>
+                  <OutlinedMeasureField
+                    label={t.interpret.prInterval}
+                    labelBg={labelBg}
+                    labelColor={nu.textMuted}
+                    borderColor={nu.border}
+                    inputBg={nu.inputBg}
+                    textColor={nu.text}
+                    placeholderColor={nu.placeholder}
+                    unitColor={nu.textMuted}
+                    value={prInterval}
+                    onChangeText={setPrInterval}
+                    unit={t.interpret.intervalsUnit}
+                    keyboardType="number-pad"
+                    alertExtra={inputAlertStyle(alertLevels.pr)}
+                    accessibilityLabel={`${t.interpret.prInterval} (${t.interpret.intervalsUnit})`}
+                    placeholder={t.interpret.emptyDash}
+                  />
+                  <OutlinedMeasureField
+                    label={t.interpret.qrsDuration}
+                    labelBg={labelBg}
+                    labelColor={nu.textMuted}
+                    borderColor={nu.border}
+                    inputBg={nu.inputBg}
+                    textColor={nu.text}
+                    placeholderColor={nu.placeholder}
+                    unitColor={nu.textMuted}
+                    value={qrsDuration}
+                    onChangeText={setQrsDuration}
+                    unit={t.interpret.intervalsUnit}
+                    keyboardType="number-pad"
+                    alertExtra={inputAlertStyle(alertLevels.qrs)}
+                    accessibilityLabel={`${t.interpret.qrsDuration} (${t.interpret.intervalsUnit})`}
+                    placeholder={t.interpret.emptyDash}
+                  />
+                  <View className="flex-1" />
                 </View>
                 {clinicalAlertLine ? (
                   <View
@@ -787,15 +959,14 @@ export default function InterpretEcgScreen() {
                     </Text>
                   </View>
                 ) : null}
-              </View>
 
-              <View className="bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 p-3">
-                <SectionHeader n={2} label={t.interpret.section2Title} />
-                <Text className="text-[10px] text-gray-500 dark:text-zinc-400 mb-1.5">{t.interpret.rhythmShortcuts}</Text>
+                <Text className="text-[10px] text-gray-500 dark:text-zinc-400 mt-3 mb-1.5">
+                  {t.interpret.rhythmShortcuts}
+                </Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  className="max-h-11 mb-3"
+                  className="max-h-11"
                   contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 8 }}
                   keyboardShouldPersistTaps="handled"
                 >
@@ -839,12 +1010,15 @@ export default function InterpretEcgScreen() {
                   </TouchableOpacity>
                 </ScrollView>
                 {rhythmMatches.length > 0 ? (
-                  <View className="mb-3">
+                  <View className="mt-2 mb-1">
                     <Text className="text-[10px] text-gray-500 dark:text-zinc-400 mb-1">{t.interpret.rhythmMatches}</Text>
                     {rhythmMatches.map(opt => (
                       <TouchableOpacity
                         key={opt}
-                        onPress={() => setRhythm(opt)}
+                        onPress={() => {
+                          setRhythm(opt);
+                          setRhythmCustomMode(false);
+                        }}
                         accessibilityRole="button"
                         accessibilityLabel={opt}
                         className="py-2 border-b border-gray-100 dark:border-zinc-800"
@@ -854,78 +1028,10 @@ export default function InterpretEcgScreen() {
                     ))}
                   </View>
                 ) : null}
-
-                <Text className="text-[10px] text-gray-500 dark:text-zinc-400 mb-1.5">{t.interpret.axisElectrical}</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  className="max-h-11 mb-3"
-                  contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'nowrap', paddingRight: 8 }}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {axisPresets.map(opt => (
-                    <TouchableOpacity
-                      key={opt}
-                      onPress={() => setAxis(opt)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: axis === opt }}
-                      accessibilityLabel={opt}
-                      className={`px-3 py-1.5 rounded-full border ${
-                        axis === opt
-                          ? 'border-violet-500 bg-violet-600'
-                          : 'border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800'
-                      }`}
-                    >
-                      <Text
-                        className={`text-[11px] font-semibold ${axis === opt ? 'text-white' : 'text-gray-700 dark:text-zinc-300'}`}
-                      >
-                        {opt}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                  <TouchableOpacity
-                    onPress={() => openCustomPrompt('axis')}
-                    accessibilityRole="button"
-                    accessibilityLabel={t.interpret.axisOther}
-                    className="px-3 py-1.5 rounded-full border border-dashed border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-900"
-                  >
-                    <Text className="text-[11px] font-semibold text-gray-600 dark:text-zinc-400">{t.interpret.axisOther}</Text>
-                  </TouchableOpacity>
-                </ScrollView>
-
-                <Text className="text-gray-800 dark:text-zinc-100 font-bold text-xs mb-1.5" accessibilityRole="header">
-                  {t.interpret.observations}
-                </Text>
-                <TextInput
-                  className="bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-zinc-100 mb-1"
-                  placeholder={t.interpret.observationsPlaceholder}
-                  placeholderTextColor="#9ca3af"
-                  multiline
-                  numberOfLines={3}
-                  textAlignVertical="top"
-                  value={observations}
-                  onChangeText={setObservations}
-                  style={{ minHeight: 64 }}
-                  accessibilityLabel={t.interpret.observations}
-                />
-
-                {(isAnalyzing || analysisStarted) && (
-                  <TouchableOpacity
-                    onPress={() => router.push(`/(cardiologue)/request-second-opinion?ecg_record_id=${id}` as Href)}
-                    accessibilityRole="button"
-                    accessibilityLabel={t.interpret.secondOpinion}
-                    className="mt-3 flex-row items-center justify-center py-2.5 rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30"
-                  >
-                    <Ionicons name="people-outline" size={16} color={joyful.primary} />
-                    <Text className="ml-2 text-xs font-semibold" style={{ color: joyful.primary }}>
-                      {t.interpret.secondOpinion}
-                    </Text>
-                  </TouchableOpacity>
-                )}
               </View>
 
               <View className="bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 p-3">
-                <SectionHeader n={3} label={t.interpret.section3Title} />
+                <SectionHeader n={2} label={t.interpret.section2Title} />
                 <TextInput
                   className="bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-gray-900 dark:text-zinc-100"
                   placeholder={t.interpret.conclusionPlaceholder}
@@ -933,7 +1039,10 @@ export default function InterpretEcgScreen() {
                   multiline
                   textAlignVertical="top"
                   value={conclusion}
-                  onChangeText={setConclusion}
+                  onChangeText={t => {
+                    conclusionEditedManuallyRef.current = true;
+                    setConclusion(t);
+                  }}
                   style={{ minHeight: 80, borderRadius: 8 }}
                   accessibilityLabel={t.interpret.conclusionTitle}
                 />
@@ -955,6 +1064,20 @@ export default function InterpretEcgScreen() {
                     <Ionicons name="sparkles" size={14} color="#0284C7" />
                     <Text className="text-sky-700 dark:text-sky-300 text-xs font-medium flex-1">
                       {t.interpret.aiPreviewLine}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {(isAnalyzing || analysisStarted) && (
+                  <TouchableOpacity
+                    onPress={() => router.push(`/(cardiologue)/request-second-opinion?ecg_record_id=${id}` as Href)}
+                    className="mt-3 border border-violet-300 dark:border-violet-700 py-2.5 rounded-xl items-center flex-row justify-center gap-2"
+                    accessibilityLabel={t.interpret.secondOpinion}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="people-outline" size={16} color="#7C3AED" />
+                    <Text className="text-violet-700 dark:text-violet-300 text-xs font-semibold">
+                      {t.interpret.secondOpinion}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -1241,6 +1364,68 @@ export default function InterpretEcgScreen() {
                 <Text className="text-white font-bold text-sm">{t.interpret.aiInsert}</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showAxisPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAxisPicker(false)}
+      >
+        <View className="flex-1 justify-end bg-black/40">
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => setShowAxisPicker(false)}
+            accessibilityRole="button"
+            accessibilityLabel={t.common.cancel}
+            className="flex-1"
+          />
+          <View
+            className="bg-white dark:bg-zinc-900 rounded-t-3xl p-4 border-t border-gray-200 dark:border-zinc-700"
+            style={{ maxHeight: axisPickerMaxH }}
+          >
+            <View className="items-center mb-3">
+              <View className="rounded-full bg-gray-300 dark:bg-zinc-600" style={{ width: 32, height: 4 }} />
+            </View>
+            <Text className="text-gray-900 dark:text-zinc-100 font-bold text-sm mb-2" accessibilityRole="header">
+              {t.interpret.axisElectrical}
+            </Text>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              style={{ maxHeight: axisPickerMaxH - 100 }}
+              showsVerticalScrollIndicator
+            >
+              {axisPresets.map(opt => (
+                <TouchableOpacity
+                  key={opt}
+                  onPress={() => {
+                    setAxis(opt);
+                    setShowAxisPicker(false);
+                  }}
+                  className="py-3 border-b border-gray-100 dark:border-zinc-800"
+                  accessibilityRole="button"
+                  accessibilityLabel={opt}
+                  accessibilityState={{ selected: axis === opt }}
+                >
+                  <Text className="text-base text-gray-900 dark:text-zinc-100">{opt}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                onPress={() => {
+                  setShowAxisPicker(false);
+                  openCustomPrompt('axis');
+                }}
+                className="py-3"
+                accessibilityRole="button"
+                accessibilityLabel={t.interpret.axisOther}
+              >
+                <Text className="text-base font-semibold text-violet-600 dark:text-violet-400">
+                  {t.interpret.axisOther}
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
