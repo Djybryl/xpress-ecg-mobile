@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/providers/AuthProvider';
 import { useCardiologistQueue } from '@/hooks/useCardiologistQueue';
 import { api, getApiErrorMessage } from '@/lib/apiClient';
+import { isSolidarityThresholdApiError, solidarityGateAlertContent } from '@/lib/solidarityGateAlert';
 import { useTranslation } from '@/i18n';
 import type { EcgRecordItem } from '@/hooks/useEcgList';
 
@@ -99,11 +100,16 @@ export default function CardiologueQueueScreen() {
       await refetch();
       router.push(`/(cardiologue)/interpret/${item.id}` as Href);
     } catch (e) {
-      Alert.alert(t.common.error, getApiErrorMessage(e));
+      if (isSolidarityThresholdApiError(e)) {
+        const { title, message } = solidarityGateAlertContent(e, t.solidarity);
+        Alert.alert(title, message);
+      } else {
+        Alert.alert(t.common.error, getApiErrorMessage(e));
+      }
     } finally {
       setTakingId(null);
     }
-  }, [user?.id, myInProgressId, refetch, t.queue.oneAtATimeTitle, t.queue.oneAtATime, t.common.error]);
+  }, [user?.id, myInProgressId, refetch, t.queue.oneAtATimeTitle, t.queue.oneAtATime, t.common.error, t.solidarity]);
 
   const handleContinue = useCallback((id: string) => {
     router.push(`/(cardiologue)/interpret/${id}` as Href);

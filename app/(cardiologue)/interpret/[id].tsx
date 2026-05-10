@@ -27,6 +27,7 @@ import { useEcgRecordDetail } from '@/hooks/useEcgRecordDetail';
 import { useAiAnalysis } from '@/hooks/useAiAnalysis';
 import { usePatientEcgHistory } from '@/hooks/usePatientEcgHistory';
 import { api, getApiErrorMessage } from '@/lib/apiClient';
+import { isSolidarityThresholdApiError, solidarityGateAlertContent } from '@/lib/solidarityGateAlert';
 import { ECGTraceView } from '@/components/ecg/ECGTraceView';
 import { useInterpretDraft } from '@/hooks/useInterpretDraft';
 import { getAxisPresets, getRhythmPresets } from '@/constants/interpretPresets';
@@ -503,9 +504,14 @@ export default function InterpretEcgScreen() {
       await api.post(`/ecg-records/${id}/start-analysis`);
       setAnalysisStarted(true);
     } catch (e) {
-      Alert.alert(t.common.error, getApiErrorMessage(e));
+      if (isSolidarityThresholdApiError(e)) {
+        const { title, message } = solidarityGateAlertContent(e, t.solidarity);
+        Alert.alert(title, message);
+      } else {
+        Alert.alert(t.common.error, getApiErrorMessage(e));
+      }
     }
-  }, [id, t.common.error]);
+  }, [id, t.common.error, t.solidarity]);
 
   const insertAiIntoConclusion = useCallback(() => {
     const draft = aiAnalysis?.pre_report_draft;

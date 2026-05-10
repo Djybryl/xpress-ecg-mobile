@@ -187,6 +187,11 @@ export const fr = {
     alertQtcCritical: 'QTc prolongé',
     alertQtcWarning: 'QTc à surveiller',
   },
+  solidarity: {
+    gateAlertTitle: 'Give & Get — seuil non atteint',
+    gateAlertBody:
+      'Pour analyser un ECG de prescripteur premium, complétez d’abord {{required}} acte(s) solidaire(s) sur les 7 derniers jours (urgences et actes gratuits).\n\nProgression : {{done}} / {{required}}.\n· Actes gratuits analysés : {{free}}\n· Urgences analysées : {{urgent}}',
+  },
   ecg: {
     loading: 'Chargement du tracé…',
     noTrace: 'Aucun tracé disponible',

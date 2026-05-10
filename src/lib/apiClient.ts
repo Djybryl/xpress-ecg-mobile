@@ -74,6 +74,8 @@ export function getApiErrorMessage(err: unknown): string {
         return 'Serveur non disponible — vérifiez votre connexion réseau.';
       case 'SESSION_EXPIRED':
         return 'Session expirée — veuillez vous reconnecter.';
+      case 'SOLIDARITY_THRESHOLD_NOT_MET':
+        return err.message;
       default: break;
     }
     switch (err.status) {

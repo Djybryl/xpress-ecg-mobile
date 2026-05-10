@@ -189,6 +189,11 @@ export const en: TranslationKeys = {
     alertQtcCritical: 'Prolonged QTc',
     alertQtcWarning: 'QTc to monitor',
   },
+  solidarity: {
+    gateAlertTitle: 'Give & Get — threshold not met',
+    gateAlertBody:
+      'To analyse a premium prescriber ECG, complete {{required}} solidarity act(s) in the rolling 7-day window (urgent and free cases).\n\nProgress: {{done}} / {{required}}.\n· Free cases analysed: {{free}}\n· Urgent cases analysed: {{urgent}}',
+  },
   ecg: {
     loading: 'Loading trace…',
     noTrace: 'No trace available',
