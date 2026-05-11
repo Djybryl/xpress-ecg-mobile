@@ -1,17 +1,20 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  Alert, ActivityIndicator, Platform, Image,
+  Alert, ActivityIndicator, Platform, Image, TextInput,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { useAuth } from '@/providers/AuthProvider';
 import { api, getApiErrorMessage } from '@/lib/apiClient';
 import { useTheme, type ThemePreference } from '@/providers/ThemeProvider';
 import { useTranslation, type Locale } from '@/i18n';
+import { useCardiologistRatios } from '@/hooks/useCardiologistRatios';
+import { useCrcAccount } from '@/hooks/useCrcAccount';
+import { useToast } from '@/providers/ToastProvider';
 
 const ROLE_LABEL: Record<string, string> = {
   medecin: 'Médecin prescripteur',
@@ -85,7 +88,54 @@ export default function ProfileScreenShared() {
   const { user, logout, refreshUser, isBiometricAvailable, isBiometricEnrolled } = useAuth();
   const { colors: joyful, preference, setPreference } = useTheme();
   const { locale, setLocale } = useTranslation();
+  const { success } = useToast();
   const insets = useSafeAreaInsets();
+  const { data: ratiosPayload } = useCardiologistRatios(
+    user?.role === 'cardiologue' ? user.id : undefined,
+  );
+  const { hasCrc, solde: crcSolde } = useCrcAccount(user?.role === 'cardiologue');
+
+  const [specIn, setSpecIn] = useState('');
+  const [phoneIn, setPhoneIn] = useState('');
+  const [cnomIn, setCnomIn] = useState('');
+  const [pseudoIn, setPseudoIn] = useState('');
+  const [savingPro, setSavingPro] = useState(false);
+  const [econTotal, setEconTotal] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (user?.role !== 'cardiologue') return;
+    setSpecIn(user.specialty ?? '');
+    setPhoneIn(user.phone ?? '');
+    setCnomIn(user.cnom ?? '');
+    setPseudoIn(user.pseudo ?? '');
+  }, [user?.id, user?.role, user?.specialty, user?.phone, user?.cnom, user?.pseudo]);
+
+  useEffect(() => {
+    if (user?.role !== 'cardiologue') return;
+    api
+      .get<{ emolumentsMonthTotal: number | null }>('/auth/me/economy')
+      .then(d => setEconTotal(d.emolumentsMonthTotal ?? null))
+      .catch(() => setEconTotal(null));
+  }, [user?.id, user?.role]);
+
+  const saveProfessional = useCallback(async () => {
+    setSavingPro(true);
+    try {
+      await api.patch('/auth/me', {
+        specialty: specIn.trim() || null,
+        phone: phoneIn.trim() || null,
+        cnom: cnomIn.trim() || null,
+        pseudo: pseudoIn.trim() || null,
+      });
+      await refreshUser();
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      success('Informations professionnelles enregistrées');
+    } catch (e) {
+      Alert.alert('Erreur', getApiErrorMessage(e));
+    } finally {
+      setSavingPro(false);
+    }
+  }, [specIn, phoneIn, cnomIn, pseudoIn, refreshUser, success]);
   const [loggingOut, setLoggingOut] = useState(false);
   const [kpiLoading] = useState(false);
 
@@ -395,6 +445,95 @@ export default function ProfileScreenShared() {
                 </Text>
               </View>
             )}
+          </View>
+        )}
+
+        {user?.role === 'cardiologue' && (
+          <View className="mx-4 mt-4 bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800 shadow-sm mb-4 overflow-hidden">
+            <Text className="text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wider px-4 pt-4 pb-2">
+              Informations professionnelles
+            </Text>
+            <View className="px-4 pb-2">
+              <Text className="text-xs text-gray-500 mb-1">Spécialité</Text>
+              <TextInput
+                value={specIn}
+                onChangeText={setSpecIn}
+                className="border border-gray-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-gray-900 dark:text-zinc-100 mb-2"
+                accessibilityLabel="Spécialité médicale"
+              />
+              <Text className="text-xs text-gray-500 mb-1">Téléphone</Text>
+              <TextInput
+                value={phoneIn}
+                onChangeText={setPhoneIn}
+                keyboardType="phone-pad"
+                className="border border-gray-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-gray-900 dark:text-zinc-100 mb-2"
+                accessibilityLabel="Téléphone professionnel"
+              />
+              <Text className="text-xs text-gray-500 mb-1">CNOM</Text>
+              <TextInput
+                value={cnomIn}
+                onChangeText={setCnomIn}
+                className="border border-gray-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-gray-900 dark:text-zinc-100 mb-2"
+                accessibilityLabel="Numéro d&apos;ordre CNOM"
+              />
+              <Text className="text-xs text-gray-500 mb-1">Pseudo (affichage CRC)</Text>
+              <TextInput
+                value={pseudoIn}
+                onChangeText={setPseudoIn}
+                className="border border-gray-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-gray-900 dark:text-zinc-100 mb-3"
+                accessibilityLabel="Pseudo cardiologue"
+              />
+              <TouchableOpacity
+                className="bg-indigo-600 rounded-xl py-3 items-center"
+                onPress={() => { void saveProfessional(); }}
+                disabled={savingPro}
+                accessibilityRole="button"
+                accessibilityLabel="Enregistrer les informations professionnelles"
+                accessibilityState={{ disabled: savingPro }}
+              >
+                {savingPro ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text className="text-white font-semibold">Enregistrer</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {user?.role === 'cardiologue' && (
+          <View className="mx-4 bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800 shadow-sm mb-4 overflow-hidden">
+            <Text className="text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wider px-4 pt-4 pb-2">
+              Mon compte
+            </Text>
+            <View className="px-4 pb-4">
+              <Text className="text-sm text-gray-700 dark:text-zinc-300 mb-1" accessibilityRole="text">
+                Give & Get :{' '}
+                {ratiosPayload?.latest
+                  ? `${ratiosPayload.latest.ecg_free_count} gratuits / ${ratiosPayload.latest.ecg_premium_count} payants (${ratiosPayload.latest.ratio_status})`
+                  : '—'}
+              </Text>
+              <Text className="text-sm text-gray-700 dark:text-zinc-300 mb-3" accessibilityRole="text">
+                Émoluments du mois :{' '}
+                {econTotal != null ? `${econTotal.toLocaleString('fr-FR')} FCFA` : '—'}
+              </Text>
+              {hasCrc ? (
+                <>
+                  <Text className="text-sm text-gray-700 dark:text-zinc-300 mb-2" accessibilityRole="text">
+                    Solde CRC : {crcSolde.toLocaleString('fr-FR')} FCFA
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => router.push('/(cardiologue)/crc/' as unknown as Href)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Ouvrir mon réseau CRC"
+                  >
+                    <Text className="text-indigo-600 dark:text-indigo-400 font-semibold">
+                      Mon réseau CRC →
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : null}
+            </View>
           </View>
         )}
 

@@ -206,6 +206,7 @@ export default function CardiologueTabLayout() {
       <Tabs.Screen name="second-opinion/[id]" options={{ href: null, title: 'Second avis' }} />
       <Tabs.Screen name="request-second-opinion" options={{ href: null, title: 'Demander un second avis' }} />
       <Tabs.Screen name="notifications" options={{ href: null, title: 'Notifications' }} />
+      <Tabs.Screen name="crc" options={{ href: null, title: 'Réseau CRC' }} />
     </Tabs>
   );
 }

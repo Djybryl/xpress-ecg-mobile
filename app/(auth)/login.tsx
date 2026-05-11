@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { useAuth } from '@/providers/AuthProvider';
 import { homeRouteForRole } from '@/lib/routesByRole';
 
@@ -162,6 +162,18 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
           </View>
+
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Pas encore de compte ? S'inscrire"
+            className="mb-4"
+            onPress={() => router.push('/(auth)/register' as Href)}
+            disabled={loading}
+          >
+            <Text className="text-center text-indigo-600 dark:text-indigo-400 text-sm font-semibold">
+              Pas encore de compte ? S&apos;inscrire
+            </Text>
+          </TouchableOpacity>
 
           {/* Bouton connexion */}
           <TouchableOpacity

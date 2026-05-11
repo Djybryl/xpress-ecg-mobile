@@ -23,15 +23,25 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function mapProfileUserToSession(u: LoginResponse['user']): UserSession {
+  const institutionId = u.institutionId ?? null;
+  const legacyHospital = u.hospitalId ?? null;
   return {
     id: u.id,
     email: u.email,
     name: u.fullName,
     role: normalizeApiRole(u.role),
-    hospitalId: u.hospitalId,
+    hospitalId: legacyHospital ?? institutionId,
+    institutionId,
+    institutionName: u.institutionName ?? null,
+    activeAccountType: u.activeAccountType ?? 'individual',
+    canSwitchToInstitutional: u.canSwitchToInstitutional ?? false,
     prescriberFirstLoginAt: u.prescriberFirstLoginAt ?? null,
     prescriberGateStatus: u.prescriberGateStatus ?? null,
     signatureUrl: u.signatureUrl ?? u.signature_url ?? null,
+    specialty: u.specialty ?? null,
+    phone: u.phone ?? null,
+    cnom: u.cnom ?? null,
+    pseudo: u.pseudo ?? null,
   };
 }
 
@@ -68,14 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(stored);
         api.get<{ user: LoginResponse['user'] }>('/auth/me', undefined, { timeoutMs: AUTH_REQUEST_TIMEOUT_MS })
           .then(me => {
-            setUser(prev => prev ? {
-              ...prev,
-              name: me.user.fullName,
-              role: normalizeApiRole(me.user.role),
-              hospitalId: me.user.hospitalId ?? prev.hospitalId,
-              prescriberGateStatus: me.user.prescriberGateStatus ?? prev.prescriberGateStatus,
-              signatureUrl: me.user.signatureUrl ?? me.user.signature_url ?? prev.signatureUrl ?? null,
-            } : prev);
+            setUser(mapProfileUserToSession(me.user));
           })
           .catch(() => null);
       } catch {

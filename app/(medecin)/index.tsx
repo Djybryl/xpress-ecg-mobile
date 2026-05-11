@@ -1,18 +1,42 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useReducer, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Platform,
+  RefreshControl, ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { useAuth } from '@/providers/AuthProvider';
 import { useEcgList, type EcgRecordItem } from '@/hooks/useEcgList';
 import { useReportList, type ReportItem } from '@/hooks/useReportList';
 import { useEconomyMe } from '@/hooks/useEconomyMe';
 import { usePatientList } from '@/hooks/usePatientList';
+import { useInstitutionCredits } from '@/hooks/useInstitutionCredits';
+import { useCrcNetworks } from '@/hooks/useCrcNetworks';
+import { api, getApiErrorMessage } from '@/lib/apiClient';
+
+type MedecinHomeState = {
+  switchLoading: boolean;
+  institutionActive: boolean;
+};
+
+type MedecinHomeAction =
+  | { type: 'switch_loading'; value: boolean }
+  | { type: 'set_institution_active'; value: boolean };
+
+function medecinHomeReducer(state: MedecinHomeState, action: MedecinHomeAction): MedecinHomeState {
+  switch (action.type) {
+    case 'switch_loading':
+      return { ...state, switchLoading: action.value };
+    case 'set_institution_active':
+      return { ...state, institutionActive: action.value };
+    default:
+      return state;
+  }
+}
 
 /**
  * Supprime le préfixe de titre médical (Dr, Dr., Pr, Pr.) en début de nom,
@@ -72,10 +96,18 @@ function StatCard({ value, label, color }: { value: number; label: string; color
 }
 
 export default function HomeScreen() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { colors: joyful } = useTheme();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
+  const [homeState, dispatchHome] = useReducer(medecinHomeReducer, {
+    switchLoading: false,
+    institutionActive: false,
+  });
+
+  useEffect(() => {
+    dispatchHome({ type: 'set_institution_active', value: user?.activeAccountType === 'institutional' });
+  }, [user?.activeAccountType]);
 
   const {
     records: ecgRecords, loading: ecgLoading, error: ecgError, refetch: refetchEcg,
@@ -102,6 +134,26 @@ export default function HomeScreen() {
 
   const { patients, refetch: refetchPatients } = usePatientList({ limit: 200, enabled: !!user?.id });
 
+  /** Rattachement à une institution (hospitalId et/ou institutionId selon le profil API). */
+  const hasInstitutionContext =
+    user?.role === 'medecin' &&
+    !!(String(user?.hospitalId ?? '').trim() || String(user?.institutionId ?? '').trim());
+
+  const instCreditsEnabled = !!user?.id && hasInstitutionContext && homeState.institutionActive;
+
+  const {
+    credits: institutionCredits,
+    institutionName: institutionalNameFromApi,
+    loading: instCreditsLoading,
+    error: instCreditsError,
+    refetch: refetchInstCredits,
+    fromCacheOnly: instCreditsFromCache,
+    accessibilityLabelOffline: instCreditsOfflineA11y,
+  } = useInstitutionCredits(instCreditsEnabled);
+
+  const crcNetworksEnabled = user?.role === 'medecin' && !!user?.id;
+  const crcNet = useCrcNetworks(crcNetworksEnabled);
+
   const ecgUsed      = economy?.quota?.ecg_used ?? economy?.subscription?.ecg_used_this_month ?? 0;
   const ecgLimit     = economy?.quota?.ecg_limit ?? economy?.subscription?.monthly_ecg_quota ?? 0;
   const ecgRemaining = economy?.gate?.remaining ?? Math.max(0, ecgLimit - ecgUsed);
@@ -109,9 +161,16 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchEcg(), refetchReports(), refetchEconomy(), refetchPatients()]);
+    await Promise.all([
+      refetchEcg(),
+      refetchReports(),
+      refetchEconomy(),
+      refetchPatients(),
+      ...(instCreditsEnabled ? [refetchInstCredits()] : []),
+      ...(crcNetworksEnabled ? [crcNet.refetch()] : []),
+    ]);
     setRefreshing(false);
-  }, [refetchEcg, refetchReports, refetchEconomy, refetchPatients]);
+  }, [refetchEcg, refetchReports, refetchEconomy, refetchPatients, refetchInstCredits, instCreditsEnabled, crcNetworksEnabled, crcNet.refetch]);
 
   const pendingCount  = ecgRecords.filter(e => e.status === 'pending').length;
   const analyzingCount = ecgRecords.filter(e => e.status === 'analyzing' || e.status === 'assigned').length;
@@ -122,6 +181,26 @@ export default function HomeScreen() {
   const recentReports: ReportItem[] = reports.filter(r => !r.is_read).slice(0, 3);
 
   const isLoading = ecgLoading || reportsLoading;
+
+  async function switchAccountType(next: 'individual' | 'institutional') {
+    if (homeState.switchLoading) return;
+    if (user?.activeAccountType === next) return;
+    dispatchHome({ type: 'switch_loading', value: true });
+    try {
+      await api.post('/auth/switch-account', { accountType: next });
+      await refreshUser();
+    } catch (e) {
+      Alert.alert('Bascule impossible', getApiErrorMessage(e));
+    } finally {
+      dispatchHome({ type: 'switch_loading', value: false });
+    }
+  }
+
+  const displayInstitutionLabel =
+    user?.institutionName ?? institutionalNameFromApi ?? institutionCredits?.institution?.name ?? 'Institution';
+
+  const primaryCrcNetwork =
+    crcNet.networks.find((n) => n.status === 'active') ?? crcNet.networks[0];
 
   return (
     <View className="flex-1 dark:bg-zinc-950" style={{ paddingTop: insets.top, backgroundColor: joyful.screenBg }}>
@@ -161,6 +240,58 @@ export default function HomeScreen() {
             )}
           </View>
         </View>
+
+        {hasInstitutionContext ? (
+          <View className="flex-row gap-2 mt-4">
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Compte personnel"
+              accessibilityState={{
+                selected: user?.activeAccountType !== 'institutional',
+                disabled: homeState.switchLoading,
+              }}
+              className={`flex-1 py-2.5 rounded-xl items-center ${
+                user?.activeAccountType !== 'institutional' ? 'bg-white' : 'bg-white/30'
+              }`}
+              onPress={() => switchAccountType('individual')}
+              disabled={homeState.switchLoading}
+            >
+              <Text
+                className={`text-sm font-bold ${
+                  user?.activeAccountType !== 'institutional' ? 'text-slate-800' : 'text-white'
+                }`}
+              >
+                Personnel
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Compte institution"
+              accessibilityState={{
+                selected: user?.activeAccountType === 'institutional',
+                disabled: homeState.switchLoading,
+              }}
+              className={`flex-1 py-2.5 rounded-xl items-center ${
+                user?.activeAccountType === 'institutional' ? 'bg-white' : 'bg-white/30'
+              }`}
+              onPress={() => switchAccountType('institutional')}
+              disabled={homeState.switchLoading}
+            >
+              <Text
+                className={`text-sm font-bold ${
+                  user?.activeAccountType === 'institutional' ? 'text-slate-800' : 'text-white'
+                }`}
+              >
+                Institution
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+        {homeState.switchLoading ? (
+          <View className="mt-3 items-center">
+            <ActivityIndicator color="#ffffff" />
+          </View>
+        ) : null}
       </LinearGradient>
 
       <ScrollView
@@ -181,6 +312,96 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         )}
+
+        {hasInstitutionContext && homeState.institutionActive ? (
+          <View className="mx-4 mt-3">
+            {instCreditsFromCache ? (
+              <View
+                className="mb-2 p-2 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/40 dark:border-amber-800"
+                accessibilityRole="alert"
+                accessibilityLabel={instCreditsOfflineA11y}
+              >
+                <Text className="text-amber-900 dark:text-amber-100 text-xs font-medium">
+                  Hors ligne — solde affiché depuis le cache.
+                </Text>
+              </View>
+            ) : null}
+            <LinearGradient
+              colors={['#065F46', '#059669']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ padding: 14, borderRadius: 16 }}
+            >
+              <Text className="text-white font-bold text-base" numberOfLines={2}>
+                Compte institution — {displayInstitutionLabel}
+              </Text>
+              {instCreditsLoading && institutionCredits == null ? (
+                <ActivityIndicator color="#ffffff" style={{ marginTop: 12 }} />
+              ) : (
+                <>
+                  <Text className="text-white text-2xl font-extrabold mt-2">
+                    {institutionCredits != null ? institutionCredits.solde_ecg : '—'}{' '}
+                    <Text className="text-lg font-bold text-emerald-100">ECG</Text>
+                  </Text>
+                  {institutionCredits != null && institutionCredits.solde_ecg === 0 ? (
+                    <Text className="text-amber-300 font-semibold text-sm mt-1">Solde épuisé</Text>
+                  ) : null}
+                </>
+              )}
+              {instCreditsError ? (
+                <Text className="text-amber-200 text-xs mt-1">{instCreditsError}</Text>
+              ) : null}
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Gérer les crédits"
+                className="mt-3 py-2"
+                onPress={() => router.push('/(medecin)/institution' as Href)}
+                activeOpacity={0.85}
+              >
+                <Text className="text-white font-semibold text-sm">Gérer les crédits →</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+          </View>
+        ) : null}
+
+        {crcNetworksEnabled && crcNet.pendingInvites.length > 0 ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Invitation CRC en attente, afficher les réseaux"
+            className="mx-4 mt-3 bg-violet-200/90 dark:bg-violet-900/60 border border-violet-400 dark:border-violet-700 rounded-xl p-3"
+            onPress={() => router.push('/(medecin)/crc' as Href)}
+            activeOpacity={0.85}
+          >
+            <Text className="text-violet-950 dark:text-violet-100 text-sm font-bold text-center">
+              Invitation CRC en attente → Voir
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {crcNetworksEnabled && crcNet.hasCrc && primaryCrcNetwork ? (
+          <LinearGradient
+            colors={['#4C1D95', '#7C3AED']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ marginHorizontal: 16, marginTop: 12, padding: 14, borderRadius: 16 }}
+          >
+            <Text className="text-violet-100 text-xs font-medium uppercase tracking-wide">Réseau CRC</Text>
+            <Text className="text-white text-lg font-bold mt-1" numberOfLines={2}>
+              {primaryCrcNetwork.cardiologue_pseudo?.trim() || primaryCrcNetwork.cardiologue_name}
+            </Text>
+            <Text className="text-violet-200 text-sm mt-1">
+              Statut : {primaryCrcNetwork.status === 'active' ? 'Actif' : 'En attente'}
+            </Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Ouvrir mes réseaux CRC"
+              className="mt-3 py-2"
+              onPress={() => router.push('/(medecin)/crc' as Href)}
+            >
+              <Text className="text-white font-semibold">Mon réseau →</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        ) : null}
 
         {/* Stats */}
         <View className="bg-white dark:bg-zinc-900 mx-4 rounded-2xl p-4 shadow-sm shadow-gray-200 dark:shadow-none border border-gray-100 dark:border-zinc-800">

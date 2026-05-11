@@ -13,6 +13,8 @@ import { useCardiologistDashboard } from '@/hooks/useCardiologistDashboard';
 import { useCardiologistQueue } from '@/hooks/useCardiologistQueue';
 import { useSolidarityEligibility } from '@/hooks/useSolidarityEligibility';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useCrcAccount } from '@/hooks/useCrcAccount';
+import { api } from '@/lib/apiClient';
 import { ECGTraceView } from '@/components/ecg/ECGTraceView';
 import { useTranslation } from '@/i18n';
 import type { EcgRecordItem } from '@/hooks/useEcgList';
@@ -139,6 +141,33 @@ export default function CardiologueHome() {
   const { data: solidarity, loading: solidarityLoading, refetch: refetchSolidarity } = useSolidarityEligibility(user?.id);
   const { unreadCount: notifCount, refetch: refetchNotifs } = useNotifications(!!user?.id);
 
+  const crcEnabled = user?.role === 'cardiologue';
+  const {
+    hasCrc,
+    solde: crcSolde,
+    loading: crcAccountLoading,
+    refetch: refetchCrcWallet,
+    error: crcAccountError,
+  } = useCrcAccount(crcEnabled);
+  const [crcQueueCount, setCrcQueueCount] = useState<number | null>(null);
+
+  const loadCrcQueueCount = useCallback(async () => {
+    if (!crcEnabled || !hasCrc) {
+      setCrcQueueCount(null);
+      return;
+    }
+    try {
+      const q = await api.get<unknown[]>('/crc/ecg-queue', { status: 'pending', limit: 50 });
+      setCrcQueueCount(Array.isArray(q) ? q.length : 0);
+    } catch {
+      setCrcQueueCount(0);
+    }
+  }, [crcEnabled, hasCrc]);
+
+  useEffect(() => {
+    void loadCrcQueueCount();
+  }, [loadCrcQueueCount]);
+
   const mineToStart = useMemo(
     () =>
       records.filter(
@@ -166,9 +195,16 @@ export default function CardiologueHome() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchDash(), refetchQueue(), refetchNotifs(), refetchSolidarity()]);
+    await Promise.all([
+      refetchDash(),
+      refetchQueue(),
+      refetchNotifs(),
+      refetchSolidarity(),
+      refetchCrcWallet(),
+      loadCrcQueueCount(),
+    ]);
     setRefreshing(false);
-  }, [refetchDash, refetchQueue, refetchNotifs, refetchSolidarity]);
+  }, [refetchDash, refetchQueue, refetchNotifs, refetchSolidarity, refetchCrcWallet, loadCrcQueueCount]);
 
   const loading = dashLoading && !stats;
 
@@ -327,6 +363,54 @@ export default function CardiologueHome() {
                 {t.dashboard.giveGetSeeRatios}
               </Text>
             </TouchableOpacity>
+
+            {crcEnabled && !crcAccountLoading && hasCrc && (
+              <LinearGradient
+                colors={['#4C1D95', '#7C3AED']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ borderRadius: 14, padding: 14, marginBottom: 16 }}
+              >
+                <Text className="text-white text-base font-bold" accessibilityRole="header">
+                  Mon réseau CRC
+                </Text>
+                <Text className="text-white/90 text-2xl font-extrabold mt-1" accessibilityRole="text">
+                  {crcSolde.toLocaleString('fr-FR')} FCFA
+                </Text>
+                <Text className="text-violet-100 text-sm mt-1" accessibilityRole="text">
+                  ECG réseau en attente : {crcQueueCount ?? '—'}
+                </Text>
+                {crcSolde < 400 ? (
+                  <Text className="text-amber-300 text-xs font-semibold mt-2" accessibilityRole="text">
+                    Solde faible — recharger
+                  </Text>
+                ) : null}
+                <TouchableOpacity
+                  className="mt-3 self-start bg-white/20 px-4 py-2 rounded-xl"
+                  onPress={() => router.push('/(cardiologue)/crc/' as Href)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Accéder au hub réseau CRC"
+                >
+                  <Text className="text-white font-bold">Accéder →</Text>
+                </TouchableOpacity>
+              </LinearGradient>
+            )}
+
+            {crcEnabled && !crcAccountLoading && !hasCrc && !crcAccountError && (
+              <View className="bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 rounded-2xl p-4 mb-4">
+                <Text className="text-violet-900 dark:text-violet-100 text-sm font-medium" accessibilityRole="text">
+                  Activez votre réseau CRC · 10 000 FCFA d&apos;inscription
+                </Text>
+                <TouchableOpacity
+                  className="mt-3 bg-violet-600 rounded-xl py-3 items-center"
+                  onPress={() => router.push('/(cardiologue)/crc/register' as Href)}
+                  accessibilityRole="button"
+                  accessibilityLabel="S&apos;inscrire au réseau CRC"
+                >
+                  <Text className="text-white font-bold">Activer →</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* ─── Carte « Mon ECG en cours » ───────────────── */}
             {myActiveEcg && (

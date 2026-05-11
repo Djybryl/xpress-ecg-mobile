@@ -255,6 +255,14 @@ export default function TabLayout() {
         name="documents"
         options={{ href: null, title: 'Mes justificatifs' }}
       />
+      <Tabs.Screen
+        name="institution"
+        options={{ href: null, title: 'Mon institution' }}
+      />
+      <Tabs.Screen
+        name="crc"
+        options={{ href: null, title: 'Mes réseaux CRC' }}
+      />
     </Tabs>
   );
 }
