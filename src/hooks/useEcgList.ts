@@ -13,6 +13,8 @@ export interface EcgRecordItem {
   assigned_to: string | null;
   /** pending (+ assigned_to) → analyzing → completed ; validated/assigned = enum legacy */
   status: 'pending' | 'assigned' | 'analyzing' | 'completed' | 'validated';
+  /** Institution facturée / routage institutionnel (liste ECG cardiologue). */
+  ecg_institution_id?: string | null;
   urgency: 'normal' | 'urgent';
   clinical_context: string | null;
   date: string;

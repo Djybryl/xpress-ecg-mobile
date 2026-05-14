@@ -18,6 +18,7 @@ import { api } from '@/lib/apiClient';
 import { ECGTraceView } from '@/components/ecg/ECGTraceView';
 import { useTranslation } from '@/i18n';
 import type { EcgRecordItem } from '@/hooks/useEcgList';
+import { parseEcgListResponse } from '@/hooks/parseEcgListResponse';
 
 function getFirstName(fullName: string): string {
   const stripped = fullName.replace(/^(\s*(Dr\.?\s+|Pr\.?\s+))+/i, '').trim();
@@ -129,6 +130,32 @@ function DeadlineRemaining({ deadline }: { deadline: string }) {
   );
 }
 
+function InstitutionEcgHomeCard({ pendingCount }: { pendingCount: number }) {
+  return (
+    <View
+      style={{ backgroundColor: '#065F46', borderRadius: 14, padding: 14, marginBottom: 16 }}
+      accessible
+      accessibilityRole="summary"
+      accessibilityLabel={`ECG institutionnels, ${pendingCount} en attente`}
+    >
+      <Text className="text-white text-base font-bold" accessibilityRole="header">
+        ECG institutionnels
+      </Text>
+      <Text className="text-white/90 text-2xl font-extrabold mt-1" accessibilityRole="text">
+        {pendingCount} en attente
+      </Text>
+      <TouchableOpacity
+        className="mt-3 self-start bg-white/20 px-4 py-2 rounded-xl"
+        onPress={() => router.push('/(cardiologue)/institution-ecg/' as Href)}
+        accessibilityRole="button"
+        accessibilityLabel="Voir la liste des ECG institutionnels"
+      >
+        <Text className="text-white font-bold">Voir →</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export default function CardiologueHome() {
   const { user } = useAuth();
   const { colors: joyful } = useTheme();
@@ -150,6 +177,35 @@ export default function CardiologueHome() {
     error: crcAccountError,
   } = useCrcAccount(crcEnabled);
   const [crcQueueCount, setCrcQueueCount] = useState<number | null>(null);
+  const [institutionCard, setInstitutionCard] = useState<{ pendingCount: number } | null>(null);
+
+  const loadInstitutionHomeCard = useCallback(async () => {
+    if (!user?.id || user.role !== 'cardiologue') {
+      setInstitutionCard(null);
+      return;
+    }
+    try {
+      const econ = await api.get<{ institutional?: Array<{ institution_id: string; institution_name: string }> }>(
+        '/auth/me/economy',
+      );
+      const inst = econ.institutional ?? [];
+      if (inst.length === 0) {
+        setInstitutionCard(null);
+        return;
+      }
+      const res = await api.get<unknown>('/ecg-records', {
+        assigned_to: user.id,
+        routing_mode: 'institutional',
+        solidarity_ranked: false,
+        limit: 80,
+      });
+      const { records } = parseEcgListResponse(res);
+      const pending = records.filter(r => r.status !== 'completed');
+      setInstitutionCard({ pendingCount: pending.length });
+    } catch {
+      setInstitutionCard(null);
+    }
+  }, [user?.id, user?.role]);
 
   const loadCrcQueueCount = useCallback(async () => {
     if (!crcEnabled || !hasCrc) {
@@ -167,6 +223,10 @@ export default function CardiologueHome() {
   useEffect(() => {
     void loadCrcQueueCount();
   }, [loadCrcQueueCount]);
+
+  useEffect(() => {
+    void loadInstitutionHomeCard();
+  }, [loadInstitutionHomeCard]);
 
   const mineToStart = useMemo(
     () =>
@@ -202,9 +262,10 @@ export default function CardiologueHome() {
       refetchSolidarity(),
       refetchCrcWallet(),
       loadCrcQueueCount(),
+      loadInstitutionHomeCard(),
     ]);
     setRefreshing(false);
-  }, [refetchDash, refetchQueue, refetchNotifs, refetchSolidarity, refetchCrcWallet, loadCrcQueueCount]);
+  }, [refetchDash, refetchQueue, refetchNotifs, refetchSolidarity, refetchCrcWallet, loadCrcQueueCount, loadInstitutionHomeCard]);
 
   const loading = dashLoading && !stats;
 
@@ -396,6 +457,10 @@ export default function CardiologueHome() {
               </LinearGradient>
             )}
 
+            {institutionCard !== null && hasCrc ? (
+              <InstitutionEcgHomeCard pendingCount={institutionCard.pendingCount} />
+            ) : null}
+
             {crcEnabled && !crcAccountLoading && !hasCrc && !crcAccountError && (
               <View className="bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 rounded-2xl p-4 mb-4">
                 <Text className="text-violet-900 dark:text-violet-100 text-sm font-medium" accessibilityRole="text">
@@ -411,6 +476,10 @@ export default function CardiologueHome() {
                 </TouchableOpacity>
               </View>
             )}
+
+            {institutionCard !== null && !crcAccountLoading && !hasCrc ? (
+              <InstitutionEcgHomeCard pendingCount={institutionCard.pendingCount} />
+            ) : null}
 
             {/* ─── Carte « Mon ECG en cours » ───────────────── */}
             {myActiveEcg && (
